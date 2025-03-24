@@ -393,6 +393,7 @@ class CloudflareSpeedTest(tk.Tk):
                 found_ips = [f"{r.ip} - {r.speed}Mbps" for r in qualified_servers]
                 messagebox.showinfo("测试完成", "找到满足要求的IP:\n" + "\n".join(found_ips))
                 self.after(0, self.stop_test)
+                self.save_results()
                 return
 
     def save_result(self, result: SpeedTestResult):
@@ -403,22 +404,29 @@ class CloudflareSpeedTest(tk.Tk):
             f.write(f"[{now}] 支持端口: {ports}\n")
 
     def save_results(self):
+        # 筛选符合要求的服务器
+        qualified_servers = [r for r in self.results if r.status == "已完成" and float(r.speed) >= self.expected_bandwidth]
+        
+        if not qualified_servers:
+            messagebox.showinfo("提示", "没有找到符合要求的服务器")
+            return
+            
         now = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
         filepath = FileDownloader.get_file_path('find.txt')
         try:
             with open(filepath, 'a', encoding='utf-8') as f:
-                f.write(f"[{now}] 测试结果:\n")
-                for result in self.results:
+                f.write(f"[{now}] 符合要求的服务器:\n")
+                f.write(f"期望带宽: {self.expected_bandwidth}Mbps\n")
+                for result in qualified_servers:
                     f.write(f"IP: {result.ip}\n")
-                    f.write(f"状态: {result.status}\n")
                     f.write(f"延迟: {result.latency}ms\n")
-                    f.write(f"速度: {result.speed}Mbps\n")
+                    f.write(f"平均速度: {result.speed}Mbps\n")
                     f.write(f"峰值速度: {float(result.peak_speed):.2f}Mbps\n")
                     f.write(f"数据中心: {result.datacenter}\n")
                     ports = "443,2053,2083,2087,2096,8443" if self.use_tls.get() else "80,8080,8880,2052,2082,2086,2095"
                     f.write(f"支持端口: {ports}\n")
                     f.write("-" * 20 + "\n")
-            messagebox.showinfo("提示", f"结果已保存到 {filepath}")
+            messagebox.showinfo("提示", f"已将{len(qualified_servers)}个符合要求的服务器信息保存到 {filepath}")
         except Exception as e:
             messagebox.showerror("错误", f"保存结果失败: {str(e)}")
 
