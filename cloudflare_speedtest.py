@@ -24,6 +24,7 @@ class SpeedTestResult:
     latency: str = "-"
     speed: str = "-"
     datacenter: str = "-"
+    peak_speed: float = 0
 
 class FileDownloader:
     URLS = {
@@ -39,7 +40,7 @@ class FileDownloader:
 
     @classmethod
     def check_files(cls) -> List[str]:
-        return [f for f in cls.URLS.keys() if not os.path.exists(cls.get_file_path(f))]
+        return list(cls.URLS.keys())
 
     @classmethod
     def download_file(cls, filename: str, url: str) -> bool:
@@ -104,7 +105,7 @@ class SpeedTester:
             logger.warning(f"加载 URL 配置失败，使用默认值: {str(e)}")
 
     def test_speed(self, ip: str, use_tls: bool, timeout: int = 10) -> Dict:
-        result = {"speed": 0, "latency": 0, "datacenter": ""}
+        result = {"speed": 0, "latency": 0, "datacenter": "", "peak_speed": 0}
         protocol = "https" if use_tls else "http"
         port = "443" if use_tls else "80"
         
@@ -112,7 +113,7 @@ class SpeedTester:
             session = requests.Session()
             if use_tls:
                 session.verify = False
-
+                
             # 测试延迟
             start_time = time.time()
             response = session.get(
@@ -122,15 +123,18 @@ class SpeedTester:
                 allow_redirects=True
             )
             result["latency"] = round((time.time() - start_time) * 1000, 2)
+            
             if response.status_code == 200:
                 for line in response.text.split('\n'):
                     if line.startswith('colo='):
                         result["datacenter"] = line.split('=')[1]
 
-            # 测试速度
-            start_time = time.time()
+            # 测速准备
+            peak_speed = 0
             total_size = 0
-            download_duration = float(self.parent.download_time.get())  # 获取下载持续时间
+            speed_samples = []
+            download_duration = float(self.parent.download_time.get())
+            chunk_size = 8192
             
             response = session.get(
                 f"{protocol}://{ip}/{self.file_path}",
@@ -138,27 +142,54 @@ class SpeedTester:
                 timeout=timeout,
                 stream=True
             )
-            
+
             start_time = time.time()
             end_time = start_time + download_duration
+            last_update_time = start_time
+
             try:
-                for chunk in response.iter_content(chunk_size=8192):
-                    total_size += len(chunk)
-                    current_time = time.time() - start_time
-                    if current_time > 0:
-                        current_speed = round((total_size / 1024 / current_time) / 128, 2)  # Mbps
-                        self.parent.after(0, lambda speed=current_speed: self.parent.current_speed_label.config(text=f"当前速度: {speed:.2f} Mbps"))
-                    if time.time() > end_time:
+                for chunk in response.iter_content(chunk_size=chunk_size):
+                    current_time = time.time()
+                    if current_time > end_time:
                         break
-                duration = time.time() - start_time
+                        
+                    chunk_size = len(chunk)
+                    total_size += chunk_size
+                    
+                    # 每0.5秒更新一次显示
+                    if current_time - last_update_time >= 0.5:
+                        elapsed = current_time - start_time
+                        current_speed = (total_size / 1024 / elapsed) / 128  # Mbps
+                        speed_samples.append(current_speed)
+                        
+                        if current_speed > peak_speed:
+                            peak_speed = current_speed
+                            
+                        # 更新UI显示
+                        self.parent.after(0, lambda s=current_speed, p=peak_speed: 
+                            self.parent.current_speed_label.config(
+                                text=f"当前速度: {s:.2f} Mbps, 峰值速度: {p:.2f} Mbps"
+                            )
+                        )
+                        last_update_time = current_time
+
+                # 计算最终结果
+                total_duration = time.time() - start_time
+                if total_duration > 0 and total_size > 0:
+                    # 计算平均速度
+                    result["speed"] = round((total_size / 1024 / total_duration) / 128, 2)  # Mbps
+                    result["peak_speed"] = round(peak_speed, 2)
+                
             except requests.exceptions.RequestException as e:
-                logger.error(f"测速 {ip} 失败: {str(e)}")
-                result["latency"] = "time out"
-            else:
-                if duration > 0:
-                    result["speed"] = round((total_size / 1024 / duration) / 128, 2)  # Mbps
+                logger.error(f"测速过程中出错: {str(e)}")
+                if total_size > 0 and (time.time() - start_time) > 0:
+                    result["speed"] = round((total_size / 1024 / (time.time() - start_time)) / 128, 2)
+                    result["peak_speed"] = round(peak_speed, 2)
+                
         except Exception as e:
             logger.error(f"测速 {ip} 失败: {str(e)}")
+            result["latency"] = "timeout"
+            
         return result
 
 class CloudflareSpeedTest(tk.Tk):
@@ -206,12 +237,13 @@ class CloudflareSpeedTest(tk.Tk):
         self.download_time.insert(0, "15")
         self.download_time.pack(side=tk.LEFT, padx=5)
 
-        self.tree = ttk.Treeview(self, columns=("ip", "status", "latency", "speed", "datacenter"), show="headings")
+        self.tree = ttk.Treeview(self, columns=("ip", "status", "latency", "speed", "datacenter", "peak_speed"), show="headings")
         self.tree.heading("ip", text="IP地址")
         self.tree.heading("status", text="状态")
         self.tree.heading("latency", text="延迟(ms)")
         self.tree.heading("speed", text="速度(Mbps)")
         self.tree.heading("datacenter", text="数据中心")
+        self.tree.heading("peak_speed", text="峰值速度(Mbps)")
         self.tree.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
         scrollbar = ttk.Scrollbar(self, orient=tk.VERTICAL, command=self.tree.yview)
@@ -236,6 +268,9 @@ class CloudflareSpeedTest(tk.Tk):
         self.clear_button = ttk.Button(button_frame, text="清空任务", command=self.clear_task)
         self.clear_button.pack(side=tk.LEFT, padx=5)
 
+        self.save_button = ttk.Button(button_frame, text="保存结果", command=self.save_results)
+        self.save_button.pack(side=tk.LEFT, padx=5)
+
     def clear_task(self):
         self.testing = False
         self.start_button.config(state=tk.NORMAL)
@@ -255,9 +290,12 @@ class CloudflareSpeedTest(tk.Tk):
 
         def download():
             for filename in missing_files:
-                if not FileDownloader.download_file(filename, FileDownloader.URLS[filename]):
+                self.progress_label.config(text=f"正在下载: {filename}")
+                success = FileDownloader.download_file(filename, FileDownloader.URLS[filename])
+                if not success:
                     messagebox.showerror("错误", f"下载 {filename} 失败，请手动下载")
                     return
+            self.progress_label.config(text="文件更新完成")
             messagebox.showinfo("提示", "文件更新完成")
 
         threading.Thread(target=download, daemon=True).start()
@@ -298,6 +336,7 @@ class CloudflareSpeedTest(tk.Tk):
             self.tree.set(item, column="latency", value=result.latency)
             self.tree.set(item, column="speed", value=result.speed)
             self.tree.set(item, column="datacenter", value=result.datacenter)
+            self.tree.set(item, column="peak_speed", value=f"{float(result.peak_speed):.2f}")
 
     def update_progress(self, current: int, total: int):
         self.progress_label.config(text=f"测试进度: {current}/{total}")
@@ -310,46 +349,51 @@ class CloudflareSpeedTest(tk.Tk):
             with open(ip_file, 'r', encoding='utf-8') as f:
                 subnets = f.read().splitlines()
 
-            ips = []
+            # 每次只生成一个IP进行测试
+            ip = None
             for subnet in random.sample(subnets, min(len(subnets), 10)):
-                ip = generate_func(subnet)
-                if ip and ip not in ips:
-                    ips.append(ip)
-                if len(ips) >= 10:
-                    break
-
-            with self.results_lock:
-                for ip in ips:
-                    result = SpeedTestResult(ip=ip)
-                    self.results.append(result)
-                    self.tree.insert("", tk.END, values=(ip, "待测试", "-", "-", "-"))
-
-            for i, result in enumerate(self.results):
                 if not self.testing:
                     break
-                if result.status != "待测试":
-                    continue
+                ip = generate_func(subnet)
+                if ip:
+                    break
 
-                item = self.tree.get_children()[i]
-                self.after(0, lambda it=item: self.tree.set(it, column="status", value="测试中"))
-                test_result = self.speed_tester.test_speed(result.ip, self.use_tls.get(), self.test_timeout)
+            if not ip:
+                continue
 
-                result.status = "已完成"
+            # 添加新的测试项到列表
+            with self.results_lock:
+                result = SpeedTestResult(ip=ip)
+                self.results.append(result)
+                item = self.tree.insert("", tk.END, values=(ip, "待测试", "-", "-", "-", "-"))
+
+            if not self.testing:
+                break
+
+            # 开始测试当前IP
+            self.tree.set(item, column="status", value="测试中")
+            test_result = self.speed_tester.test_speed(ip, self.use_tls.get(), self.test_timeout)
+            
+            # 更新测试结果
+            result.status = "已完成"
+            if isinstance(test_result['latency'], (int, float)):
                 result.latency = f"{test_result['latency']:.2f}"
-                result.speed = f"{test_result['speed']:.2f}"
-                result.datacenter = test_result['datacenter']
-                self.after(0, lambda it=item, res=result: self.update_tree(it, res))
-                self.after(0, lambda: self.update_progress(i + 1, len(self.results)))
+            else:
+                result.latency = test_result['latency']
+            result.speed = f"{test_result['speed']:.2f}"
+            result.datacenter = test_result['datacenter']
+            result.peak_speed = test_result['peak_speed']
+            
+            self.update_tree(item, result)
+            self.update_progress(len(self.results), len(self.results))
 
-                if test_result['speed'] >= self.expected_bandwidth:
-                    self.save_result(result)
-                    
-                    if len([r for r in self.results if r.status == "已完成" and float(r.speed) >= self.expected_bandwidth]) >= self.expected_servers_count:
-                        
-                        found_ips = [f"{r.ip} - {r.speed}Mbps" for r in self.results if r.status == "已完成" and float(r.speed) >= self.expected_bandwidth]
-                        messagebox.showinfo("测试完成", "找到满足要求的IP:\n" + "\n".join(found_ips))
-                        self.after(0, self.stop_test)
-                        break
+            # 检查是否已找到满足要求的服务器
+            qualified_servers = [r for r in self.results if r.status == "已完成" and float(r.speed) >= self.expected_bandwidth]
+            if len(qualified_servers) >= self.expected_servers_count:
+                found_ips = [f"{r.ip} - {r.speed}Mbps" for r in qualified_servers]
+                messagebox.showinfo("测试完成", "找到满足要求的IP:\n" + "\n".join(found_ips))
+                self.after(0, self.stop_test)
+                return
 
     def save_result(self, result: SpeedTestResult):
         now = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
@@ -357,6 +401,27 @@ class CloudflareSpeedTest(tk.Tk):
             f.write(f"[{now}] 优选IP: {result.ip}\n延迟: {result.latency}\n速度: {result.speed}Mbps\n数据中心: {result.datacenter}\n")
             ports = "443,2053,2083,2087,2096,8443" if self.use_tls.get() else "80,8080,8880,2052,2082,2086,2095"
             f.write(f"[{now}] 支持端口: {ports}\n")
+
+    def save_results(self):
+        now = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+        filepath = FileDownloader.get_file_path('find.txt')
+        try:
+            with open(filepath, 'a', encoding='utf-8') as f:
+                f.write(f"[{now}] 测试结果:\n")
+                for result in self.results:
+                    f.write(f"IP: {result.ip}\n")
+                    f.write(f"状态: {result.status}\n")
+                    f.write(f"延迟: {result.latency}ms\n")
+                    f.write(f"速度: {result.speed}Mbps\n")
+                    f.write(f"峰值速度: {float(result.peak_speed):.2f}Mbps\n")
+                    f.write(f"数据中心: {result.datacenter}\n")
+                    ports = "443,2053,2083,2087,2096,8443" if self.use_tls.get() else "80,8080,8880,2052,2082,2086,2095"
+                    f.write(f"支持端口: {ports}\n")
+                    f.write("-" * 20 + "\n")
+            messagebox.showinfo("提示", f"结果已保存到 {filepath}")
+        except Exception as e:
+            messagebox.showerror("错误", f"保存结果失败: {str(e)}")
+
     def on_closing(self):
         self.stop_test()
         if self.test_thread and self.test_thread.is_alive():
