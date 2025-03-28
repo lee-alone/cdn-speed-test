@@ -34,6 +34,10 @@ class CloudflareSpeedTest(tk.Tk):
         self.title("Cloudflare IP 优选测速")
         self.geometry("1024x768")  # 增加窗口大小
         
+        # 添加排序相关变量
+        self.sort_column = None
+        self.sort_reverse = False
+
         # 设置窗口样式和主题
         self.style = ttk.Style()
         self.style.theme_use('clam')
@@ -134,12 +138,12 @@ class CloudflareSpeedTest(tk.Tk):
         
         # 配置表格列宽
         self.tree = ttk.Treeview(table_frame, columns=("ip", "status", "latency", "speed", "datacenter", "peak_speed"), show="headings")
-        self.tree.heading("ip", text="IP地址")
-        self.tree.heading("status", text="状态")
-        self.tree.heading("latency", text="延迟(ms)")
-        self.tree.heading("speed", text="速度(Mbps)")
-        self.tree.heading("datacenter", text="数据中心")
-        self.tree.heading("peak_speed", text="峰值速度(Mbps)")
+        self.tree.heading("ip", text="IP地址", command=lambda: self.sort_tree("ip"))
+        self.tree.heading("status", text="状态", command=lambda: self.sort_tree("status"))
+        self.tree.heading("latency", text="延迟(ms)", command=lambda: self.sort_tree("latency"))
+        self.tree.heading("speed", text="速度(Mbps)", command=lambda: self.sort_tree("speed"))
+        self.tree.heading("datacenter", text="数据中心", command=lambda: self.sort_tree("datacenter"))
+        self.tree.heading("peak_speed", text="峰值速度(Mbps)", command=lambda: self.sort_tree("peak_speed"))
         
         # 设置列宽
         self.tree.column("ip", width=150)
@@ -325,6 +329,22 @@ class CloudflareSpeedTest(tk.Tk):
                 self.after(0, self.stop_test)
                 return
 
+    def sort_tree(self, column):
+        with self.results_lock:
+            if self.sort_column == column:
+                self.sort_reverse = not self.sort_reverse
+            else:
+                self.sort_column = column
+                self.sort_reverse = False
+
+            data = [(self.tree.set(child, column), child) for child in self.tree.get_children()]
+            try:
+                data.sort(key=lambda x: float(x[0]) if x[0].replace('.', '', 1).isdigit() else x[0], reverse=self.sort_reverse)
+            except ValueError:
+                data.sort(key=lambda x: x[0], reverse=self.sort_reverse)
+
+            for index, (_, child) in enumerate(data):
+                self.tree.move(child, '', index)
 
     def on_closing(self):
         config = load_config()
