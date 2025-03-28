@@ -52,8 +52,9 @@ class SpeedTester:
             peak_speed = 0
             total_size = 0
             speed_samples = []
+            window_size = 5  # 滑动窗口大小
             download_duration = float(self.parent.download_time.get())
-            chunk_size = 8192
+            chunk_size = 65536
             
             response = session.get(
                 f"{protocol}://{ip}/{self.file_path}",
@@ -80,9 +81,14 @@ class SpeedTester:
                         elapsed = current_time - start_time
                         current_speed = (total_size / 1024 / elapsed) / 128  # Mbps
                         speed_samples.append(current_speed)
+                        if len(speed_samples) > window_size:
+                            speed_samples.pop(0)  # 移除最早的样本
                         
-                        if current_speed > peak_speed:
-                            peak_speed = current_speed
+                        # 计算滑动窗口内的平均速度
+                        average_speed = sum(speed_samples) / len(speed_samples) if speed_samples else 0
+                        
+                        if average_speed > peak_speed:
+                            peak_speed = average_speed
                             
                         # 更新UI显示
                         self.parent.after(0, lambda s=current_speed, p=peak_speed: 
