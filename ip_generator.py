@@ -24,9 +24,7 @@ class IPGenerator:
             if ip_type == "ipv4":
                 ip = str(random.choice(list(network.hosts())))
             else:  # ipv6
-                hex_chars = '0123456789abcdef'
-                suffix = ''.join(random.choice(hex_chars) for _ in range(16))
-                ip = f"{network[0].exploded.rsplit(':', 1)[0]}:{suffix}"
+                ip = str(network[random.randint(1, network.num_addresses - 1)])
 
             if ip not in self.used_ips:
                 self.used_ips.add(ip)

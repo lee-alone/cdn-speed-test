@@ -3,7 +3,21 @@ import os
 
 def load_config():
     config = configparser.ConfigParser()
-    config.read('config.ini')
+    try:
+        config.read('config.ini')
+    except FileNotFoundError:
+        # 如果config.ini文件不存在，则创建该文件并写入默认值
+        config['DEFAULT'] = {
+            'expected_servers': '1',
+            'use_tls': 'False',
+            'ip_type': 'ipv4',
+            'bandwidth': '5',
+            'timeout': '5',
+            'download_time': '15',
+            'filepath': './'
+        }
+        with open('config.ini', 'w', encoding='utf-8') as configfile:
+            config.write(configfile)
     return config
 
 def save_config(config, expected_servers, use_tls, ip_type, bandwidth, timeout, download_time, filepath):
@@ -19,15 +33,11 @@ def save_config(config, expected_servers, use_tls, ip_type, bandwidth, timeout, 
 
 def load_find_path():
     config = load_config()
-    filepath = config['DEFAULT'].get('filepath', '')
-    if not filepath:
-        # 如果config.ini中不存在filepath，则创建find.txt文件，并将路径写入config.ini
+    filepath = config['DEFAULT'].get('filepath', './')
+    if filepath == './':
         current_path = os.path.dirname(os.path.abspath(__file__))
-        find_path = os.path.join(current_path, 'find.txt')
-        with open(find_path, 'w', encoding='utf-8') as f:
-            f.write(current_path)
-        config['DEFAULT']['filepath'] = find_path
-        save_config(config, config['DEFAULT']['expected_servers'], config['DEFAULT']['use_tls'], config['DEFAULT']['ip_type'], config['DEFAULT']['bandwidth'], config['DEFAULT']['timeout'], config['DEFAULT']['download_time'], find_path)
-        return find_path
+        config['DEFAULT']['filepath'] = current_path
+        save_config(config, config['DEFAULT']['expected_servers'], config['DEFAULT']['use_tls'], config['DEFAULT']['ip_type'], config['DEFAULT']['bandwidth'], config['DEFAULT']['timeout'], config['DEFAULT']['download_time'], current_path)
+        return current_path
     else:
         return filepath

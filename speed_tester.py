@@ -15,7 +15,13 @@ class SpeedTester:
 
     def load_url_config(self):
         try:
-            with open(FileDownloader.get_file_path('url.txt'), 'r', encoding='utf-8') as f:
+            file_path = FileDownloader.get_file_path('url.txt')
+            if not os.path.exists(file_path):
+                logger.warning(f"文件不存在: {file_path}")
+                self.domain = "example.com"
+                self.file_path = ""
+                return
+            with open(file_path, 'r', encoding='utf-8') as f:
                 url = f.read().strip()
                 parts = url.split('/', 1)
                 self.domain = parts[0]

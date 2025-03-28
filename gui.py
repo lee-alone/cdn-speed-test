@@ -242,8 +242,9 @@ class CloudflareSpeedTest(tk.Tk):
         threading.Thread(target=download, daemon=True).start()
 
     def start_test(self):
-        if not all(os.path.exists(FileDownloader.get_file_path(f)) for f in FileDownloader.URLS.keys()):
-            messagebox.showerror("错误", "缺少必要文件，请先更新数据")
+        missing_files = [f for f in FileDownloader.URLS.keys() if not os.path.exists(FileDownloader.get_file_path(f))]
+        if missing_files:
+            messagebox.showerror("错误", f"缺少文件: {', '.join(missing_files)}，请先更新数据")
             return
 
         try:
