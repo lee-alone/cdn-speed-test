@@ -13,6 +13,7 @@ from speed_tester import SpeedTester
 from downloader import FileDownloader
 from config_manager import load_config, save_config, load_find_path
 from result_writer import save_results
+from network_tester import check_network_environment
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +53,7 @@ class CloudflareSpeedTest(tk.Tk):
         self.style.configure("Treeview", background="white", 
                         fieldbackground="white", foreground="black")
         self.style.configure("Treeview.Heading", font=('微软雅黑', 9, 'bold'))
+        self.style.configure("Network.TLabel", foreground="red", font=('微软雅黑', 9, 'bold'))
         
         self.configure(bg="#f0f0f0")
         
@@ -68,6 +70,9 @@ class CloudflareSpeedTest(tk.Tk):
         self.results: List[SpeedTestResult] = []
         self.testing = False
         self.test_thread = None
+
+        # 添加网络环境检测
+        self.check_network_environment()
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
 
     def init_components(self):
@@ -112,6 +117,10 @@ class CloudflareSpeedTest(tk.Tk):
         
         self.use_tls = tk.BooleanVar(value=self.config.getboolean('DEFAULT', 'use_tls'))
         ttk.Checkbutton(left_frame, text="启用TLS", variable=self.use_tls).pack(side=tk.LEFT, padx=10)
+        
+        # 网络环境提示标签
+        self.network_label = ttk.Label(left_frame, text="", style="Network.TLabel")
+        self.network_label.pack(side=tk.LEFT, padx=10)
         
         # 右侧配置组
         right_frame = ttk.Frame(row2_frame)
@@ -345,6 +354,19 @@ class CloudflareSpeedTest(tk.Tk):
 
             for index, (_, child) in enumerate(data):
                 self.tree.move(child, '', index)
+
+    def check_network_environment(self):
+        """检查网络环境并更新UI"""
+        def update_network_status():
+            needs_proxy = check_network_environment()
+            if needs_proxy:
+                self.network_label.config(text="请关闭科学环境")
+            else:
+                self.network_label.config(text="当前环境正常")
+            # 每60秒检查一次网络环境
+            self.after(60000, update_network_status)
+        
+        update_network_status()
 
     def on_closing(self):
         config = load_config()

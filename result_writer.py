@@ -5,34 +5,46 @@ from dataclasses import dataclass
 from config_manager import load_find_path
 import typing
 import re
+import configparser  # 导入 configparser 模块
 
 if typing.TYPE_CHECKING:
     from gui import SpeedTestResult
 
 def save_results(qualified_servers: Optional[List['SpeedTestResult']] = None, expected_bandwidth = None, find_path = None, use_tls = None, TLS_PORTS = None, NON_TLS_PORTS = None):
-    if qualified_servers is None:
+    if not qualified_servers:
         return
 
-    if not qualified_servers:
-        print("没有找到符合要求的服务器")
-        return
-        
-    now = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
     filepath = os.path.join(find_path, 'find.txt')
     try:
-        with open(filepath, 'a', encoding='utf-8') as f:
-            f.write(f"[{now}] 符合要求的服务器:\n")
-            f.write(f"期望带宽: {expected_bandwidth}Mbps\n")
-            for result in qualified_servers:
+        config = configparser.ConfigParser()
+        config.read('config.ini')
+        min_bandwidth = config.getfloat('DEFAULT', 'bandwidth')
+
+        for result in qualified_servers:
+            try:
+                # 检查带宽是否满足要求，将速度值转换为浮点数
+                current_speed = float(str(result.speed).replace('Mbps', '').strip())
+                if current_speed < min_bandwidth:
+                    continue
+
                 # 检查IP是否已经存在
                 if _is_ip_exists(filepath, result.ip):
-                    print(f"IP {result.ip} 已经存在，跳过写入")
                     continue
-                _write_result_to_file(f, result)
-                ports = TLS_PORTS if use_tls else NON_TLS_PORTS
-                f.write(f"支持端口: {ports}\n")
-                f.write("-" * 20 + "\n")
-        #  print(f"已将{len(qualified_servers)}个符合要求的服务器信息保存到 {filepath}")
+
+                # 写入符合条件的服务器信息
+                with open(filepath, 'a', encoding='utf-8') as f:
+                    now = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+                    f.write(f"\n[{now}] 符合要求的服务器:\n")
+                    f.write(f"期望带宽: {expected_bandwidth}Mbps\n")
+                    _write_result_to_file(f, result)
+                    ports = TLS_PORTS if use_tls else NON_TLS_PORTS
+                    f.write(f"支持端口: {ports}\n")
+                    f.write("-" * 20 + "\n")
+            except (ValueError, TypeError) as e:
+                # 如果速度值无法转换为浮点数，跳过该结果
+                print(f"处理 IP {result.ip} 的速度值时出错: {str(e)}")
+                continue
+
     except Exception as e:
         print(f"保存结果失败: {str(e)}")
 
