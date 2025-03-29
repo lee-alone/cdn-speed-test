@@ -41,6 +41,15 @@ class SpeedTester:
                 
             # 测试延迟
             start_time = time.time()
+            import ipaddress
+            
+            try:
+                ipaddress.ip_address(ip)
+                if isinstance(ipaddress.ip_address(ip), ipaddress.IPv6Address):
+                    ip = f"[{ip}]"
+            except ValueError:
+                pass
+
             response = session.get(
                 f"{protocol}://{ip}/cdn-cgi/trace",
                 headers={'Host': self.domain},
