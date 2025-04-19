@@ -29,7 +29,7 @@ class SpeedTester:
         except Exception as e:
             logger.warning(f"加载 URL 配置失败，使用默认值: {str(e)}")
 
-    def test_speed(self, ip: str, use_tls: bool, timeout: int = 10) -> dict:
+    def test_speed(self, ip: str, use_tls: bool, timeout: int = 10, datacenter_only: bool = False) -> dict:
         result = {"speed": 0, "latency": 0, "datacenter": "", "peak_speed": 0}
         protocol = "https" if use_tls else "http"
         port = "443" if use_tls else "80"
@@ -62,6 +62,10 @@ class SpeedTester:
                 for line in response.text.split('\n'):
                     if line.startswith('colo='):
                         result["datacenter"] = line.split('=')[1]
+            
+            # 如果只需要检测数据中心，则直接返回结果
+            if datacenter_only:
+                return result
 
             # 测速准备
             peak_speed = 0
