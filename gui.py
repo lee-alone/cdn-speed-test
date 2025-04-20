@@ -56,16 +56,16 @@ class CloudflareSpeedTest(tk.Tk):
         self.style.configure("Network.TLabel", foreground="red", font=('微软雅黑', 9, 'bold'))
         
         self.configure(bg="#f0f0f0")
-        
         random.seed(time.time())
         self.results_lock = threading.Lock()
-
+        
         # 读取配置文件
         self.config = load_config()
         self.filepath = self.config['DEFAULT'].get('filepath', '')
         
         # 加载数据中心信息
         self.datacenters = self.load_datacenters()
+        self.all_datacenters = self.datacenters.copy()  # 保存完整列表供筛选使用
 
         self.init_components()
         self.ip_generator = IPGenerator()
@@ -73,14 +73,14 @@ class CloudflareSpeedTest(tk.Tk):
         self.results: List[SpeedTestResult] = []
         self.testing = False
         self.test_thread = None
-
+        
         # 添加网络环境检测
         self.check_network_environment()
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
 
     def load_datacenters(self):
         """从colo.txt文件中加载数据中心信息"""
-        datacenters = ["全部"]  # 默认选项
+        datacenters = []  # 临时列表，不包含"全部"选项
         try:
             file_path = FileDownloader.get_file_path('colo.txt')
             if os.path.exists(file_path):
@@ -95,9 +95,14 @@ class CloudflareSpeedTest(tk.Tk):
                                 code_only = code.split('-')[-1].strip('()')
                                 # 数据中心缩写放在前面，其他信息放在后面
                                 datacenters.append(f"{code_only} - {location}")
+                
+                # 按照数据中心代码（前缀部分）排序
+                datacenters.sort(key=lambda x: x.split(' - ')[0])
         except Exception as e:
             logger.error(f"加载数据中心信息失败: {str(e)}")
-        return datacenters
+        
+        # 在排序后的列表前添加"全部"选项
+        return ["全部"] + datacenters
 
     def init_components(self):
         # 创建主容器
@@ -145,10 +150,14 @@ class CloudflareSpeedTest(tk.Tk):
         # 数据中心选择
         ttk.Label(left_frame, text="数据中心:").pack(side=tk.LEFT, padx=5)
         self.datacenter_var = tk.StringVar(value="全部")
-        self.datacenter_combobox = ttk.Combobox(left_frame, textvariable=self.datacenter_var, width=20, state="readonly")
+        self.datacenter_combobox = ttk.Combobox(left_frame, textvariable=self.datacenter_var, width=20)
         self.datacenter_combobox['values'] = self.datacenters
         self.datacenter_combobox.current(0)  # 默认选择"全部"
         self.datacenter_combobox.pack(side=tk.LEFT, padx=5)
+        
+        # 绑定键盘事件
+        self.datacenter_combobox.bind('<KeyRelease>', self.filter_datacenters)
+        self.all_datacenters = self.datacenters.copy()  # 保存完整的数据中心列表
         
         # 网络环境提示标签
         self.network_label = ttk.Label(left_frame, text="", style="Network.TLabel")
@@ -324,21 +333,30 @@ class CloudflareSpeedTest(tk.Tk):
         # 提取用户选择的数据中心代码
         selected_datacenter_code = ""
         if selected_datacenter != "全部":
-            # 从选项中提取数据中心代码，格式为 "(XXX) 地点"
-            selected_datacenter_code = selected_datacenter.split(" ")[0].strip()
+            # 从选项中提取数据中心代码
+            selected_datacenter_code = selected_datacenter.split(" - ")[0].strip()
 
         while self.testing:
+            # 首先检查是否已经找到足够的合格IP
+            qualified_servers = [r for r in self.results if r.status == "已完成" and r.speed != "-" and float(r.speed) >= self.expected_bandwidth]
+            if len(qualified_servers) >= self.expected_servers_count:
+                save_results(qualified_servers, self.expected_bandwidth, self.filepath, use_tls, self.TLS_PORTS, self.NON_TLS_PORTS)
+                found_ips = [f"{r.ip} - {r.speed}Mbps" for r in qualified_servers]
+                messagebox.showinfo("测试完成", "找到满足要求的IP:\n" + "\n".join(found_ips))
+                self.after(0, self.stop_test)
+                return
+
             with open(ip_file, 'r', encoding='utf-8') as f:
                 subnets = f.read().splitlines()
             
-            # 随机抽取10个IP进行预测试
+            # 随机抽取IP进行预测试
             candidate_ips = []
             tested_subnets = set()
             
             # 随机选择子网并生成IP
             for _ in range(min(30, len(subnets))):
                 if not self.testing:
-                    break
+                    return
                     
                 subnet = random.choice(subnets)
                 if subnet in tested_subnets:
@@ -358,7 +376,7 @@ class CloudflareSpeedTest(tk.Tk):
             matching_ips = []
             for ip in candidate_ips:
                 if not self.testing:
-                    break
+                    return
                     
                 # 添加新的测试项到列表
                 with self.results_lock:
@@ -379,41 +397,43 @@ class CloudflareSpeedTest(tk.Tk):
                 if (selected_datacenter == "全部" or 
                     (datacenter_code and selected_datacenter_code and datacenter_code == selected_datacenter_code)):
                     matching_ips.append((ip, item, result))
+                    result.status = "待测试"
+                    self.tree.set(item, column="status", value="待测试")
                 else:
-                    # 不匹配，标记为跳过
                     result.status = "跳过"
                     self.tree.set(item, column="status", value="跳过")
             
-            # 对匹配的IP进行完整测速
-            for ip, item, result in matching_ips:
-                if not self.testing:
-                    break
+            # 测试匹配的IP
+            if matching_ips:
+                for ip, item, result in matching_ips:
+                    if not self.testing:
+                        return
+                        
+                    # 在测试每个IP前检查是否已经找到足够的合格IP
+                    qualified_servers = [r for r in self.results if r.status == "已完成" and r.speed != "-" and float(r.speed) >= self.expected_bandwidth]
+                    if len(qualified_servers) >= self.expected_servers_count:
+                        save_results(qualified_servers, self.expected_bandwidth, self.filepath, use_tls, self.TLS_PORTS, self.NON_TLS_PORTS)
+                        found_ips = [f"{r.ip} - {r.speed}Mbps" for r in qualified_servers]
+                        messagebox.showinfo("测试完成", "找到满足要求的IP:\n" + "\n".join(found_ips))
+                        self.after(0, self.stop_test)
+                        return
+                        
+                    # 开始测试当前IP
+                    self.tree.set(item, column="status", value="测试中")
+                    test_result = self.speed_tester.test_speed(ip, use_tls, self.test_timeout)
                     
-                # 开始测试当前IP
-                self.tree.set(item, column="status", value="测试中")
-                test_result = self.speed_tester.test_speed(ip, use_tls, self.test_timeout)
-                
-                # 更新测试结果
-                result.status = "已完成"
-                if isinstance(test_result['latency'], (int, float)):
-                    result.latency = f"{test_result['latency']:.2f}"
-                else:
-                    result.latency = test_result['latency']
-                result.speed = f"{test_result['speed']:.2f}"
-                result.datacenter = test_result['datacenter']
-                result.peak_speed = test_result['peak_speed']
-                
-                self.update_tree(item, result)
-                self.progress_label.config(text=f"测试进度: {len([r for r in self.results if r.status == '已完成'])}/{len(self.results)}")
-
-                # 检查是否已找到满足要求的服务器
-                qualified_servers = [r for r in self.results if r.status == "已完成" and r.speed != "-" and float(r.speed) >= self.expected_bandwidth]
-                save_results(qualified_servers, self.expected_bandwidth, self.filepath, use_tls, self.TLS_PORTS, self.NON_TLS_PORTS)
-                if len(qualified_servers) >= self.expected_servers_count:
-                    found_ips = [f"{r.ip} - {r.speed}Mbps" for r in qualified_servers]
-                    messagebox.showinfo("测试完成", "找到满足要求的IP:\n" + "\n".join(found_ips))
-                    self.after(0, self.stop_test)
-                    return
+                    # 更新测试结果
+                    result.status = "已完成"
+                    if isinstance(test_result['latency'], (int, float)):
+                        result.latency = f"{test_result['latency']:.2f}"
+                    else:
+                        result.latency = test_result['latency']
+                    result.speed = f"{test_result['speed']:.2f}"
+                    result.datacenter = test_result['datacenter']
+                    result.peak_speed = test_result['peak_speed']
+                    
+                    self.update_tree(item, result)
+                    self.progress_label.config(text=f"测试进度: {len([r for r in self.results if r.status == '已完成'])}/{len(self.results)}")
 
     def sort_tree(self, column):
         with self.results_lock:
@@ -452,3 +472,26 @@ class CloudflareSpeedTest(tk.Tk):
         if self.test_thread and self.test_thread.is_alive():
             self.test_thread.join(timeout=1)
         self.destroy()
+
+    def filter_datacenters(self, event):
+        """根据用户输入筛选数据中心列表，只匹配缩写的首字母"""
+        text = self.datacenter_combobox.get()
+        if not text:
+            # 如果输入为空，显示所有选项
+            self.datacenter_combobox['values'] = self.all_datacenters
+            return
+        
+        # 筛选匹配的数据中心
+        # 数据中心格式为 "XXX - 地点"，我们需要获取破折号前的缩写部分
+        filtered = ["全部"]
+        for dc in self.all_datacenters[1:]:  # 跳过"全部"选项
+            datacenter_code = dc.split(' - ')[0].strip()
+            # 如果数据中心代码的首字母（忽略大小写）匹配用户输入
+            if datacenter_code and datacenter_code[0].lower() == text[0].lower():
+                filtered.append(dc)
+        
+        # 更新下拉列表的值
+        self.datacenter_combobox['values'] = filtered
+        
+        # 保持下拉列表打开
+        self.datacenter_combobox.event_generate('<Down>')
