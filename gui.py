@@ -393,9 +393,14 @@ class CloudflareSpeedTest(tk.Tk):
                 result.datacenter = datacenter_code
                 self.tree.set(item, column="datacenter", value=datacenter_code)
                 
+                # 检查是否有数据中心信息，没有则标记为无效并跳过
+                if not datacenter_code:
+                    result.status = "无效"
+                    self.tree.set(item, column="status", value="无效")
+                    self.tree.set(item, column="latency", value="-")
                 # 如果用户选择了特定数据中心，检查是否匹配
-                if (selected_datacenter == "全部" or 
-                    (datacenter_code and selected_datacenter_code and datacenter_code == selected_datacenter_code)):
+                elif (selected_datacenter == "全部" or 
+                      (datacenter_code and selected_datacenter_code and datacenter_code == selected_datacenter_code)):
                     matching_ips.append((ip, item, result))
                     result.status = "待测试"
                     self.tree.set(item, column="status", value="待测试")
