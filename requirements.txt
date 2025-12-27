@@ -1,5 +1,2 @@
 requests>=2.31.0
-dataclasses
-typing
 configparser
-tkinter
