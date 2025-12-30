@@ -71,12 +71,13 @@ func (est *EnhancedSpeedTester) TestDataCenterOnly(ip string, useTLS bool, timeo
 		return "", -1, fmt.Errorf("failed to create request: %w", err)
 	}
 
+	req.Host = est.domain
 	req.Header.Set("Host", est.domain)
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
 	req.Header.Set("Accept", "*/*")
 	req.Header.Set("Cache-Control", "no-cache")
 
-	client := est.createHTTPClient(useTLS, timeout)
+	client := est.createHTTPClient(useTLS, timeout, timeout)
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", -1, fmt.Errorf("failed to get datacenter info: %w", err)
@@ -131,10 +132,11 @@ func (est *EnhancedSpeedTester) TestSpeedOnly(ip string, useTLS bool, timeout in
 		return nil, fmt.Errorf("failed to create download request: %w", err)
 	}
 
+	req.Host = est.domain
 	req.Header.Set("Host", est.domain)
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
 
-	client := est.createHTTPClient(useTLS, timeout)
+	client := est.createHTTPClient(useTLS, timeout, 0)
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start download: %w", err)
@@ -264,10 +266,12 @@ func (est *EnhancedSpeedTester) calculateWindowedSpeed(samples []SpeedSample) fl
 }
 
 // createHTTPClient creates an HTTP client with proper configuration
-func (est *EnhancedSpeedTester) createHTTPClient(useTLS bool, timeout int) *http.Client {
+// connectTimeout: timeout for establishing connection
+// totalTimeout: timeout for the entire request (0 for no timeout/infinite)
+func (est *EnhancedSpeedTester) createHTTPClient(useTLS bool, connectTimeout int, totalTimeout int) *http.Client {
 	transport := &http.Transport{
 		DialContext: (&net.Dialer{
-			Timeout: time.Duration(timeout) * time.Second,
+			Timeout: time.Duration(connectTimeout) * time.Second,
 		}).DialContext,
 		DisableKeepAlives: false, // Enable keep-alives for better performance
 		MaxIdleConns:      10,
@@ -283,7 +287,7 @@ func (est *EnhancedSpeedTester) createHTTPClient(useTLS bool, timeout int) *http
 	}
 
 	return &http.Client{
-		Timeout:   time.Duration(timeout) * time.Second,
+		Timeout:   time.Duration(totalTimeout) * time.Second,
 		Transport: transport,
 	}
 }
@@ -309,10 +313,11 @@ func (est *EnhancedSpeedTester) TestSpeedWithSamples(ip string, useTLS bool, tim
 		return nil, nil, fmt.Errorf("failed to create download request: %w", err)
 	}
 
+	req.Host = est.domain
 	req.Header.Set("Host", est.domain)
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
 
-	client := est.createHTTPClient(useTLS, timeout)
+	client := est.createHTTPClient(useTLS, timeout, 0)
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to start download: %w", err)

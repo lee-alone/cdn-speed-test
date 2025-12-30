@@ -134,6 +134,7 @@ func (st *SpeedTester) testLatency(ip string, useTLS bool, timeout int) float64 
 		return -1
 	}
 
+	req.Host = st.domain
 	req.Header.Set("Host", st.domain)
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
 
@@ -173,6 +174,7 @@ func (st *SpeedTester) testDataCenter(ip string, useTLS bool, timeout int) strin
 		return ""
 	}
 
+	req.Host = st.domain
 	req.Header.Set("Host", st.domain)
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
 	req.Header.Set("Accept", "*/*")
@@ -248,11 +250,15 @@ func (st *SpeedTester) testDownloadSpeed(ip string, useTLS bool, timeout int, do
 		return -1, 0
 	}
 
+	req.Host = st.domain
 	req.Header.Set("Host", st.domain)
 
 	client := &http.Client{
-		Timeout: time.Duration(timeout) * time.Second,
+		Timeout: 0, // Disable total timeout for download, rely on manual loop
 		Transport: &http.Transport{
+			DialContext: (&net.Dialer{
+				Timeout: time.Duration(timeout) * time.Second,
+			}).DialContext,
 			TLSClientConfig: &tls.Config{
 				InsecureSkipVerify: true,
 				ServerName:         st.domain, // Add SNI
