@@ -1,0 +1,35 @@
+# Cloudflare Speed Test Configuration
+# This is an example configuration file
+# Copy this to config.yaml and modify as needed
+
+# Test settings
+test:
+  # Number of servers to find
+  expected_servers: 3
+  
+  # Use TLS for testing
+  use_tls: false
+  
+  # IP type: ipv4 or ipv6
+  ip_type: ipv6
+  
+  # Expected bandwidth in Mbps
+  bandwidth: 100
+  
+  # Timeout in seconds
+  timeout: 5
+  
+  # Download test duration in seconds
+  download_time: 10
+  
+  # File path for saving results
+  file_path: ./
+
+# Download settings
+download:
+  # URLs for downloading data files
+  urls:
+    ips-v4.txt: https://www.baipiao.eu.org/cloudflare/ips-v4
+    ips-v6.txt: https://www.baipiao.eu.org/cloudflare/ips-v6
+    colo.txt: https://www.baipiao.eu.org/cloudflare/colo
+    url.txt: https://www.baipiao.eu.org/cloudflare/url
