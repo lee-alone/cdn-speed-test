@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -857,30 +858,51 @@ func (s *Server) Run(addr string) error {
 
 // updateData updates data files from upstream
 func (s *Server) updateData(c *gin.Context) {
+	// Parse request body to check for force flag
+	var req struct {
+		Force bool `json:"force"`
+	}
+	c.ShouldBindJSON(&req)
+
 	// Get files from configuration
 	files := downloader.GetFilesFromConfig(s.config.GetAllDownloadURLs())
 
-	// Check for missing files
-	var missing []downloader.FileInfo
-	for _, file := range files {
-		filePath := filepath.Join(s.dataDir, file.Name)
-		if !downloader.FileExists(filePath) {
-			missing = append(missing, file)
+	var toDownload []downloader.FileInfo
+
+	if req.Force {
+		// Force update: delete existing files and download all files
+		for _, file := range files {
+			filePath := filepath.Join(s.dataDir, file.Name)
+			// Delete existing file to force re-download
+			if downloader.FileExists(filePath) {
+				if err := os.Remove(filePath); err != nil {
+					fmt.Printf("Warning: failed to delete %s: %v\n", filePath, err)
+				}
+			}
+		}
+		toDownload = files
+	} else {
+		// Normal update: only download missing files
+		for _, file := range files {
+			filePath := filepath.Join(s.dataDir, file.Name)
+			if !downloader.FileExists(filePath) {
+				toDownload = append(toDownload, file)
+			}
 		}
 	}
 
-	if len(missing) == 0 {
+	if len(toDownload) == 0 {
 		c.JSON(http.StatusOK, gin.H{
 			"message": "all files are up to date",
-			"files":   []string{},
+			"files":   0,
 		})
 		return
 	}
 
-	// Download missing files
+	// Download files
 	go func() {
-		fmt.Printf("Starting download of %d files...\n", len(missing))
-		if err := s.downloader.DownloadFiles(missing, s.dataDir); err != nil {
+		fmt.Printf("Starting download of %d files...\n", len(toDownload))
+		if err := s.downloader.DownloadFiles(toDownload, s.dataDir); err != nil {
 			fmt.Printf("Download error: %v\n", err)
 		} else {
 			fmt.Println("Download completed successfully")
@@ -889,7 +911,7 @@ func (s *Server) updateData(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "download started",
-		"files":   len(missing),
+		"files":   len(toDownload),
 	})
 }
 

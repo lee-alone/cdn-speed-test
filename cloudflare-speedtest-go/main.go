@@ -37,7 +37,7 @@ func main() {
 	fmt.Printf("Data directory: %s\n", exeDir)
 	fmt.Println("Open http://localhost:8081 in your browser")
 
-	if err := srv.Run(":8081"); err != nil {
+	if err := srv.Run(":8080"); err != nil {
 		log.Fatalf("Server error: %v", err)
 	}
 }

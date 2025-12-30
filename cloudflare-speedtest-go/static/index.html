@@ -743,16 +743,47 @@
         }
 
         async function updateData() {
-            const updateBtn = document.getElementById('updateBtn');
-            updateBtn.disabled = true;
-            updateBtn.textContent = '更新中...';
-
             try {
-                const response = await fetch('/api/update', { method: 'POST' });
+                // First check if data files exist
+                const statusResponse = await fetch('/api/status');
+                if (!statusResponse.ok) throw new Error('Failed to check status');
+                
+                const statusData = await statusResponse.json();
+                // If missingFiles is empty, all files exist
+                const hasAllFiles = statusData.missing_files && statusData.missing_files.length === 0;
+                
+                // If all data files exist, show confirmation dialog
+                if (hasAllFiles) {
+                    const confirmed = confirm('本地已存在数据文件，是否要覆盖更新？\n\n点击"确定"将下载最新数据并覆盖原文件。');
+                    if (!confirmed) {
+                        return;
+                    }
+                }
+                
+                // Proceed with update
+                const updateBtn = document.getElementById('updateBtn');
+                updateBtn.disabled = true;
+                updateBtn.textContent = '更新中...';
+
+                const response = await fetch('/api/update', { 
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        force: hasAllFiles
+                    })
+                });
+                
                 if (!response.ok) throw new Error('Failed to update data');
 
                 const data = await response.json();
-                alert('数据更新' + (data.files > 0 ? '已开始，请稍候...' : '已是最新'));
+                
+                if (data.files > 0) {
+                    alert('数据更新已开始，请稍候...');
+                } else {
+                    alert('所有数据文件已是最新');
+                }
                 
                 // Check status after a delay
                 setTimeout(checkStatus, 2000);
@@ -760,6 +791,7 @@
                 console.error('Error:', error);
                 alert('更新失败: ' + error.message);
             } finally {
+                const updateBtn = document.getElementById('updateBtn');
                 updateBtn.disabled = false;
                 updateBtn.textContent = '更新数据';
             }
