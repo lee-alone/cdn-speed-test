@@ -91,17 +91,23 @@ func (st *SpeedTester) TestSpeed(ip string, useTLS bool, timeout int, downloadTi
 
 // createHTTPClient creates an HTTP client with proper headers
 func (st *SpeedTester) createHTTPClient(useTLS bool, timeout int) *http.Client {
+	transport := &http.Transport{
+		DialContext: (&net.Dialer{
+			Timeout: time.Duration(timeout) * time.Second,
+		}).DialContext,
+	}
+
+	// Configure TLS if needed
+	if useTLS {
+		transport.TLSClientConfig = &tls.Config{
+			InsecureSkipVerify: true,
+			ServerName:         st.domain, // Add SNI
+		}
+	}
+
 	return &http.Client{
-		Timeout: time.Duration(timeout) * time.Second,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: true,
-				ServerName:         st.domain, // Add SNI
-			},
-			DialContext: (&net.Dialer{
-				Timeout: time.Duration(timeout) * time.Second,
-			}).DialContext,
-		},
+		Timeout:   time.Duration(timeout) * time.Second,
+		Transport: transport,
 	}
 }
 

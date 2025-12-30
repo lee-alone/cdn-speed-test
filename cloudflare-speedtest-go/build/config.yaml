@@ -1,0 +1,27 @@
+test:
+    expected_servers: 3
+    use_tls: false
+    ip_type: ipv6
+    bandwidth: 100
+    timeout: 5
+    download_time: 10
+    file_path: ./
+    datacenter_filter: all
+    concurrent_workers: 10
+    sample_interval: 1
+download:
+    urls:
+        colo.txt: https://www.baipiao.eu.org/cloudflare/colo
+        ips-v4.txt: https://www.baipiao.eu.org/cloudflare/ips-v4
+        ips-v6.txt: https://www.baipiao.eu.org/cloudflare/ips-v6
+        url.txt: https://www.baipiao.eu.org/cloudflare/url
+ui:
+    datacenter_filter: all
+    result_format: table
+    auto_refresh: true
+    theme: light
+advanced:
+    concurrent_workers: 10
+    retry_attempts: 3
+    log_level: info
+    enable_metrics: true
