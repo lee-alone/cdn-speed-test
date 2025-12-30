@@ -784,7 +784,34 @@ func (s *Server) runSpeedTestPhase(validIPs []string, domain, filePath string) {
 
 		// Small delay between tests to avoid overwhelming the server
 		time.Sleep(100 * time.Millisecond)
+
+		// Check if we found enough qualified servers
+		qualifiedResults := s.resultManager.GetQualifiedResults()
+		qualifiedCount := 0
+		expectedBandwidth := s.config.Test.Bandwidth
+
+		for _, r := range qualifiedResults {
+			// Speed is string like "123.45", ignore errors as they should be valid floats
+			speedVal, err := strconv.ParseFloat(r.Speed, 64)
+			if err == nil && speedVal >= expectedBandwidth {
+				qualifiedCount++
+			}
+		}
+
+		if qualifiedCount >= s.config.Test.ExpectedServers {
+			fmt.Printf("\nFound %d qualified servers (speed >= %.2f Mbps). Expected: %d. Stopping test.\n",
+				qualifiedCount, expectedBandwidth, s.config.Test.ExpectedServers)
+
+			// Update total to match completed so frontend knows we are done
+			stats := s.resultManager.GetStats()
+			s.resultManager.SetTotal(stats.Completed)
+
+			break
+		}
 	}
+
+	// Clear current IP status
+	s.resultManager.UpdateCurrentTest("", "")
 }
 
 // storeResult stores a test result using ResultManager and updates metrics
