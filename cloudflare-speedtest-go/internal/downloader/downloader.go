@@ -123,27 +123,10 @@ func (d *Downloader) DownloadWithProgress(fileInfo FileInfo, outputPath string) 
 
 	startTime := time.Now()
 
-	// Check cache first
+	// Determine cache path
+	var cachePath string
 	if d.cacheDir != "" {
-		if cached, err := d.checkCache(fileInfo); err == nil && cached {
-			cachedPath := filepath.Join(d.cacheDir, fileInfo.Name)
-			if err := d.copyFile(cachedPath, outputPath); err == nil {
-				result.Success = true
-				result.Duration = time.Since(startTime)
-				result.BytesWritten = fileInfo.Size
-				result.Verified = true
-
-				d.sendProgress(ProgressInfo{
-					FileName:   fileInfo.Name,
-					Status:     "completed",
-					Percentage: 100,
-					StartTime:  startTime,
-					EndTime:    time.Now(),
-				})
-
-				return result
-			}
-		}
+		cachePath = filepath.Join(d.cacheDir, fileInfo.Name)
 	}
 
 	// Attempt download with retries
@@ -156,7 +139,13 @@ func (d *Downloader) DownloadWithProgress(fileInfo FileInfo, outputPath string) 
 			StartTime: startTime,
 		})
 
-		err := d.downloadWithProgressTracking(fileInfo, outputPath)
+		// Download to cache if cache directory is set, otherwise download directly to output path
+		downloadTarget := outputPath
+		if cachePath != "" {
+			downloadTarget = cachePath
+		}
+
+		err := d.downloadWithProgressTracking(fileInfo, downloadTarget)
 		if err == nil {
 			// Verify file integrity if checksum is provided
 			if fileInfo.Checksum != "" {
@@ -165,7 +154,7 @@ func (d *Downloader) DownloadWithProgress(fileInfo FileInfo, outputPath string) 
 					Status:   "verifying",
 				})
 
-				if verified, verifyErr := d.verifyFileIntegrity(outputPath, fileInfo); verifyErr == nil && verified {
+				if verified, verifyErr := d.verifyFileIntegrity(downloadTarget, fileInfo); verifyErr == nil && verified {
 					result.Verified = true
 				} else {
 					err = fmt.Errorf("file verification failed: %w", verifyErr)
@@ -173,9 +162,23 @@ func (d *Downloader) DownloadWithProgress(fileInfo FileInfo, outputPath string) 
 			}
 
 			if err == nil {
-				// Cache the file if cache directory is set
-				if d.cacheDir != "" {
-					d.cacheFile(fileInfo, outputPath)
+				// If downloaded to cache, copy to output path (with overwrite)
+				if cachePath != "" && cachePath != outputPath {
+					if err := d.copyFile(cachePath, outputPath); err != nil {
+						result.Error = fmt.Errorf("failed to copy from cache to output: %w", err)
+						d.sendProgress(ProgressInfo{
+							FileName:  fileInfo.Name,
+							Status:    "failed",
+							Error:     result.Error,
+							StartTime: startTime,
+							EndTime:   time.Now(),
+						})
+						continue
+					}
+					// Clean up cache file after successful copy
+					if err := os.Remove(cachePath); err != nil {
+						fmt.Printf("Warning: failed to delete cache file %s: %v\n", cachePath, err)
+					}
 				}
 
 				result.Success = true
@@ -362,7 +365,8 @@ func (d *Downloader) checkCache(fileInfo FileInfo) (bool, error) {
 	return true, nil
 }
 
-// cacheFile copies a file to cache directory
+// cacheFile copies a file to cache directory (deprecated - no longer used)
+// Kept for backward compatibility but not called in new flow
 func (d *Downloader) cacheFile(fileInfo FileInfo, sourcePath string) error {
 	if d.cacheDir == "" {
 		return nil // No cache directory set

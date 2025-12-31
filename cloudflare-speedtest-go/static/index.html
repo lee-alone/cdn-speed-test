@@ -876,8 +876,11 @@
                 if (!statusResponse.ok) throw new Error('Failed to check status');
                 
                 const statusData = await statusResponse.json();
+                console.log('Status data:', statusData);
+                
                 // If missingFiles is empty, all files exist
                 const hasAllFiles = statusData.missing_files && statusData.missing_files.length === 0;
+                console.log('Has all files:', hasAllFiles, 'Missing files:', statusData.missing_files);
                 
                 // If all data files exist, show confirmation dialog
                 if (hasAllFiles) {
@@ -892,19 +895,23 @@
                 updateBtn.disabled = true;
                 updateBtn.textContent = '更新中...';
 
+                const requestBody = {
+                    force: hasAllFiles
+                };
+                console.log('Sending update request with body:', requestBody);
+
                 const response = await fetch('/api/update', { 
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({
-                        force: hasAllFiles
-                    })
+                    body: JSON.stringify(requestBody)
                 });
                 
                 if (!response.ok) throw new Error('Failed to update data');
 
                 const data = await response.json();
+                console.log('Update response:', data);
                 
                 if (data.files > 0) {
                     alert('数据更新已开始，请稍候...');
@@ -1244,8 +1251,8 @@
                 // Update file status display
                 renderFileStatus(status);
 
-                if (status.missingFiles && status.missingFiles.length > 0) {
-                    console.log('Missing files:', status.missingFiles);
+                if (status.missing_files && status.missing_files.length > 0) {
+                    console.log('Missing files:', status.missing_files);
                 } else {
                     console.log('All data files are ready');
                 }
@@ -1257,13 +1264,13 @@
         function renderFileStatus(status) {
             const container = document.getElementById('filesStatusContainer');
             
-            if (!status.missingFiles || status.missingFiles.length === 0) {
+            if (!status.missing_files || status.missing_files.length === 0) {
                 container.innerHTML = '<div style="color: #22543d; background: #c6f6d5; padding: 10px; border-radius: 4px;">✓ 所有数据文件已就绪</div>';
                 return;
             }
 
             let html = '<div style="color: #7c2d12; background: #feebc8; padding: 10px; border-radius: 4px;">';
-            html += '⚠ 缺少以下数据文件: ' + status.missingFiles.join(', ');
+            html += '⚠ 缺少以下数据文件: ' + status.missing_files.join(', ');
             html += '<br><small>点击"更新数据"按钮下载缺失的文件</small>';
             html += '</div>';
             

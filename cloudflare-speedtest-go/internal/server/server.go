@@ -15,7 +15,6 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -913,34 +912,42 @@ func (s *Server) updateData(c *gin.Context) {
 	var req struct {
 		Force bool `json:"force"`
 	}
-	c.ShouldBindJSON(&req)
+
+	// Get raw body for debugging
+	body, _ := c.GetRawData()
+	fmt.Printf("Raw request body: %s\n", string(body))
+
+	// Try to bind JSON
+	if err := c.ShouldBindJSON(&req); err != nil {
+		fmt.Printf("Warning: Failed to parse JSON body: %v\n", err)
+		// Continue anyway, Force will be false by default
+	}
+
+	fmt.Printf("Update request received - Force: %v\n", req.Force)
 
 	// Get files from configuration
 	files := downloader.GetFilesFromConfig(s.config.GetAllDownloadURLs())
+	fmt.Printf("Total files to check: %d\n", len(files))
 
 	var toDownload []downloader.FileInfo
 
 	if req.Force {
-		// Force update: delete existing files and download all files
-		for _, file := range files {
-			filePath := filepath.Join(s.dataDir, file.Name)
-			// Delete existing file to force re-download
-			if downloader.FileExists(filePath) {
-				if err := os.Remove(filePath); err != nil {
-					fmt.Printf("Warning: failed to delete %s: %v\n", filePath, err)
-				}
-			}
-		}
+		// Force update: download all files (will overwrite existing ones)
 		toDownload = files
+		fmt.Printf("Force update requested: will download and overwrite %d files\n", len(files))
 	} else {
 		// Normal update: only download missing files
 		for _, file := range files {
 			filePath := filepath.Join(s.dataDir, file.Name)
-			if !downloader.FileExists(filePath) {
+			exists := downloader.FileExists(filePath)
+			fmt.Printf("Checking file %s: exists=%v\n", file.Name, exists)
+			if !exists {
 				toDownload = append(toDownload, file)
 			}
 		}
 	}
+
+	fmt.Printf("Files to download: %d\n", len(toDownload))
 
 	if len(toDownload) == 0 {
 		c.JSON(http.StatusOK, gin.H{
@@ -996,7 +1003,7 @@ func (s *Server) getStatus(c *gin.Context) {
 		"testing":        testing,
 		"resultCount":    resultCount,
 		"qualifiedCount": s.resultManager.GetQualifiedCount(),
-		"missingFiles":   missingFiles,
+		"missing_files":  missingFiles,
 		"dataDir":        s.dataDir,
 		"urlCount":       s.urlManager.URLCount(),
 		"coloCount":      s.coloManager.ColoCount(),
