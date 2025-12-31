@@ -35,7 +35,7 @@ func main() {
 
 	fmt.Printf("Starting Cloudflare Speed Test server...\n")
 	fmt.Printf("Data directory: %s\n", exeDir)
-	fmt.Println("Open http://localhost:8081 in your browser")
+	fmt.Println("Open http://localhost:8080 in your browser")
 
 	if err := srv.Run(":8080"); err != nil {
 		log.Fatalf("Server error: %v", err)

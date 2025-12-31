@@ -99,31 +99,22 @@ func (s *Server) setupRoutes() {
 		api.POST("/config/save", s.saveConfig)
 		api.POST("/config/validate", s.validateConfig)
 		api.GET("/datacenters", s.getDataCenters)
-		api.GET("/datacenters/regions", s.getDataCentersByRegion)
 		api.POST("/datacenters/filter", s.setDataCenterFilter)
-		api.GET("/workerpool/stats", s.getWorkerPoolStats)
 		api.GET("/results", s.getResults)
 		api.GET("/results/sorted", s.getSortedResults)
 		api.GET("/results/qualified", s.getQualifiedResults)
 		api.GET("/results/export/:format", s.exportResults)
-		api.GET("/results/memory", s.getMemoryUsage)
 		api.GET("/stats", s.getStats)
 		api.GET("/metrics", s.getMetrics)
 		api.GET("/metrics/performance", s.getPerformanceStats)
 		api.GET("/metrics/speed/smoothed", s.getSmoothedSpeed)
 		api.GET("/metrics/speed/samples", s.getSpeedSamples)
-		api.POST("/metrics/reset", s.resetMetrics)
 		api.GET("/errors/stats", s.getErrorStats)
-		api.GET("/errors/policies", s.getRetryPolicies)
-		api.POST("/errors/degraded", s.enableDegradedMode)
-		api.DELETE("/errors/degraded", s.disableDegradedMode)
-		api.GET("/download/progress", s.getDownloadProgress)
 		api.POST("/start", s.startTest)
 		api.POST("/stop", s.stopTest)
 		api.DELETE("/results", s.clearResults)
 		api.POST("/update", s.updateData)
 		api.GET("/status", s.getStatus)
-		api.GET("/debug", s.getDebugInfo)
 	}
 
 	// HTML routes
@@ -615,8 +606,52 @@ func (s *Server) runTest() {
 	fmt.Println("\n=== PHASE 1: Concurrent Datacenter Detection ===")
 	validIPs := s.runDataCenterPhase(ips, domain, filePath)
 
+	// If no valid IPs found, try to read more IPs and retry
 	if len(validIPs) == 0 {
-		fmt.Println("No valid IPs found after datacenter detection phase")
+		fmt.Println("No valid IPs found in first batch, attempting to read more IPs...")
+
+		// Determine max attempts: -1 means unlimited, otherwise use configured value
+		maxAttempts := s.config.Advanced.RetryAttempts
+		if maxAttempts < 0 {
+			maxAttempts = 1000 // Use a large number to represent "unlimited"
+		}
+
+		// Try to read more IPs
+		for attempt := 1; attempt <= maxAttempts && len(validIPs) == 0; attempt++ {
+			// Check if testing should stop
+			s.testMu.RLock()
+			if !s.testing {
+				s.testMu.RUnlock()
+				fmt.Println("Testing stopped by user")
+				return
+			}
+			s.testMu.RUnlock()
+
+			// Show warning message after 3 attempts
+			if attempt >= 3 {
+				fmt.Printf("Retry attempt %d: 该数据中心IP较少，需要较长时间，请耐心等待...\n", attempt)
+			} else {
+				fmt.Printf("Retry attempt %d: Reading more IPs...\n", attempt)
+			}
+
+			moreIPs, err := s.ipReader.ReadIPs(s.config.Test.IPType, 100)
+			if err != nil {
+				fmt.Printf("Failed to read more IPs: %v\n", err)
+				break
+			}
+
+			if len(moreIPs) == 0 {
+				fmt.Println("No more IPs available")
+				break
+			}
+
+			fmt.Printf("Testing %d more IPs\n", len(moreIPs))
+			validIPs = s.runDataCenterPhase(moreIPs, domain, filePath)
+		}
+	}
+
+	if len(validIPs) == 0 {
+		fmt.Println("No valid IPs found after all attempts")
 		fmt.Println("This might be due to:")
 		fmt.Println("1. Network connectivity issues")
 		fmt.Println("2. Strict datacenter filtering")
@@ -691,7 +726,12 @@ func (s *Server) runDataCenterPhase(ips []string, domain, filePath string) []str
 
 	// Collect results and filter valid IPs
 	validIPs := make([]string, 0)
+	testedCount := 0
+	filteredCount := 0
+
 	for result := range resultChan {
+		testedCount++
+
 		if result.Error != nil {
 			fmt.Printf("Datacenter test failed for %s: %v\n", result.IP, result.Error)
 			continue
@@ -705,11 +745,19 @@ func (s *Server) runDataCenterPhase(ips []string, domain, filePath string) []str
 		// Apply datacenter filtering
 		if !s.coloManager.FilterByDataCenter(result.DataCenter) {
 			fmt.Printf("IP %s filtered out (datacenter: %s not in selected list)\n", result.IP, result.DataCenter)
+			filteredCount++
 			continue
 		}
 
 		fmt.Printf("Valid IP found: %s (datacenter: %s, latency: %.2f ms)\n", result.IP, result.DataCenter, result.Latency)
 		validIPs = append(validIPs, result.IP)
+	}
+
+	fmt.Printf("Datacenter phase summary: Tested=%d, Filtered=%d, Valid=%d\n", testedCount, filteredCount, len(validIPs))
+
+	// If no valid IPs found due to filtering, log warning
+	if len(validIPs) == 0 && filteredCount > 0 {
+		fmt.Printf("WARNING: All %d IPs were filtered out due to datacenter selection. No IPs match the selected datacenters.\n", filteredCount)
 	}
 
 	return validIPs
@@ -786,7 +834,7 @@ func (s *Server) runSpeedTestPhase(validIPs []string, domain, filePath string) {
 		// Small delay between tests to avoid overwhelming the server
 		time.Sleep(100 * time.Millisecond)
 
-		// Check if we found enough qualified servers
+		// Check if we found enough qualified servers (with bandwidth requirement)
 		qualifiedResults := s.resultManager.GetQualifiedResults()
 		qualifiedCount := 0
 		expectedBandwidth := s.config.Test.Bandwidth
@@ -798,6 +846,9 @@ func (s *Server) runSpeedTestPhase(validIPs []string, domain, filePath string) {
 				qualifiedCount++
 			}
 		}
+
+		fmt.Printf("Current progress: %d servers with speed >= %.2f Mbps (need %d)\n",
+			qualifiedCount, expectedBandwidth, s.config.Test.ExpectedServers)
 
 		if qualifiedCount >= s.config.Test.ExpectedServers {
 			fmt.Printf("\nFound %d qualified servers (speed >= %.2f Mbps). Expected: %d. Stopping test.\n",

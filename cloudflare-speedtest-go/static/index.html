@@ -136,6 +136,39 @@
             background: #cbd5e0;
         }
 
+        .btn-warning {
+            background: #ed8936;
+            color: white;
+        }
+
+        .btn-warning:hover:not(:disabled) {
+            background: #dd6b20;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(237, 137, 54, 0.4);
+        }
+
+        .btn-info {
+            background: #4299e1;
+            color: white;
+        }
+
+        .btn-info:hover:not(:disabled) {
+            background: #3182ce;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(66, 153, 225, 0.4);
+        }
+
+        .btn-success {
+            background: #48bb78;
+            color: white;
+        }
+
+        .btn-success:hover:not(:disabled) {
+            background: #38a169;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(72, 187, 120, 0.4);
+        }
+
         button:disabled {
             opacity: 0.5;
             cursor: not-allowed;
@@ -366,8 +399,8 @@
                 
                 <div class="config-row">
                     <div class="config-item">
-                        <label for="maxRetries">最大重试次数</label>
-                        <input type="number" id="maxRetries" min="0" max="10" value="3">
+                        <label for="maxRetries">最大重试次数 (-1=无限)</label>
+                        <input type="number" id="maxRetries" min="-1" max="100" value="-1">
                     </div>
                     <div class="config-item">
                         <label for="retryDelay">重试延迟 (秒)</label>
@@ -385,11 +418,11 @@
                         <label for="enableErrorHandling" style="margin-bottom: 0;">启用错误处理</label>
                     </div>
                 </div>
-            </div>
 
-            <h3 style="margin-top: 20px; color: #333;">下载地址配置</h3>
-            
-            <div id="urlsContainer"></div>
+                <h4 style="margin-top: 20px; color: #333;">下载地址配置</h4>
+                
+                <div id="urlsContainer"></div>
+            </div>
 
             <h3 style="margin-top: 20px; color: #333;">数据文件状态</h3>
             
@@ -398,14 +431,11 @@
 
         <!-- Button Group -->
         <div class="button-group">
-            <button class="btn-primary" id="startBtn" onclick="startTest()">开始测试</button>
+            <button class="btn-primary" id="startBtn" onclick="startTestWithAutoSave()">开始测试</button>
             <button class="btn-danger" id="stopBtn" onclick="stopTest()" disabled>停止测试</button>
-            <button class="btn-secondary" id="clearBtn" onclick="clearResults()">清空结果</button>
-            <button class="btn-secondary" id="updateBtn" onclick="updateData()">更新数据</button>
-            <button class="btn-secondary" id="saveConfigBtn" onclick="saveConfig()">保存配置</button>
-            <button class="btn-secondary" id="validateConfigBtn" onclick="validateConfig()" style="background: #48bb78; color: white;">验证配置</button>
-            <button class="btn-secondary" id="exportBtn" onclick="showExportOptions()">导出结果</button>
-            <button class="btn-secondary" id="debugBtn" onclick="showDebugInfo()" style="background: #f56565; color: white;">调试信息</button>
+            <button class="btn-warning" id="clearBtn" onclick="clearResults()">清空结果</button>
+            <button class="btn-info" id="updateBtn" onclick="updateData()">更新数据</button>
+            <button class="btn-success" id="exportBtn" onclick="showExportOptions()">导出结果</button>
         </div>
 
         <!-- Export Options Modal -->
@@ -462,10 +492,6 @@
                 <div class="status-label">测试状态</div>
                 <div class="status-value" id="testStatus">就绪</div>
             </div>
-            <div class="status-item">
-                <div class="status-label">工作线程</div>
-                <div class="status-value" id="workerStatus">0/0</div>
-            </div>
         </div>
 
         <!-- Real-time Speed Chart -->
@@ -497,21 +523,6 @@
                         平均: <span id="avgLatency">- ms</span> / 
                         最小: <span id="minLatency">- ms</span> / 
                         最大: <span id="maxLatency">- ms</span>
-                    </div>
-                </div>
-                <div style="background: white; padding: 15px; border-radius: 4px; border-left: 4px solid #ed8936;">
-                    <div style="font-size: 12px; color: #666; margin-bottom: 5px;">错误统计</div>
-                    <div style="font-size: 14px;">
-                        网络: <span id="networkErrors">0</span> / 
-                        超时: <span id="timeoutErrors">0</span> / 
-                        其他: <span id="otherErrors">0</span>
-                    </div>
-                </div>
-                <div style="background: white; padding: 15px; border-radius: 4px; border-left: 4px solid #9f7aea;">
-                    <div style="font-size: 12px; color: #666; margin-bottom: 5px;">系统状态</div>
-                    <div style="font-size: 14px;">
-                        降级模式: <span id="degradedMode">否</span> / 
-                        内存使用: <span id="memoryUsage">- MB</span>
                     </div>
                 </div>
             </div>
@@ -553,6 +564,7 @@
         let testStartTime = null;
         let testTimeoutId = null;
         let lastProgressUpdate = null;
+        let finalResultsFetched = false;
 
         // Initialize speed chart
         function initSpeedChart() {
@@ -641,6 +653,122 @@
             };
         }
 
+        async function startTestWithAutoSave() {
+            if (isTesting) return;
+
+            const startBtn = document.getElementById('startBtn');
+            startBtn.disabled = true;
+
+            try {
+                // Collect all URLs from the form
+                const urls = {};
+                const urlInputs = document.querySelectorAll('[data-url-key]');
+                urlInputs.forEach(input => {
+                    const key = input.getAttribute('data-url-key');
+                    const value = input.value.trim();
+                    if (value) {
+                        urls[key] = value;
+                    }
+                });
+
+                // Collect selected datacenters
+                const selectedDatacenters = [];
+                const datacenterCheckboxes = document.querySelectorAll('input[name="datacenter"]:checked');
+                datacenterCheckboxes.forEach(checkbox => {
+                    selectedDatacenters.push(checkbox.value);
+                });
+
+                // Build config object matching the backend structure
+                const config = {
+                    test: {
+                        expected_servers: parseInt(document.getElementById('expectedServers').value) || 3,
+                        use_tls: document.getElementById('useTLS').checked,
+                        ip_type: document.getElementById('ipType').value || 'ipv4',
+                        bandwidth: parseFloat(document.getElementById('bandwidth').value) || 100,
+                        timeout: parseInt(document.getElementById('timeout').value) || 5,
+                        download_time: parseInt(document.getElementById('downloadTime').value) || 10,
+                        file_path: './',
+                        datacenter_filter: document.getElementById('datacenterMode').value || 'all',
+                        concurrent_workers: parseInt(document.getElementById('concurrentWorkers').value) || 10,
+                        sample_interval: 1
+                    },
+                    download: {
+                        urls: urls
+                    },
+                    ui: {
+                        datacenter_filter: document.getElementById('datacenterMode').value || 'all',
+                        result_format: 'table',
+                        auto_refresh: true,
+                        theme: 'light'
+                    },
+                    advanced: {
+                        concurrent_workers: parseInt(document.getElementById('concurrentWorkers').value) || 10,
+                        retry_attempts: parseInt(document.getElementById('maxRetries').value) || 3,
+                        log_level: 'info',
+                        enable_metrics: document.getElementById('enableMetrics').checked
+                    }
+                };
+
+                console.log('Saving config before test:', config);
+
+                // First validate config
+                const validateResponse = await fetch('/api/config/validate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+                
+                const validateResult = await validateResponse.json();
+                
+                if (!validateResponse.ok || !validateResult.valid) {
+                    throw new Error(validateResult.error || '配置验证失败');
+                }
+
+                // Update config in memory
+                let response = await fetch('/api/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to update config');
+                }
+
+                // Update datacenter filter
+                const datacenterFilterResponse = await fetch('/api/datacenters/filter', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        mode: config.ui.datacenter_filter,
+                        selected: selectedDatacenters
+                    })
+                });
+
+                if (!datacenterFilterResponse.ok) {
+                    console.warn('Failed to update datacenter filter, but continuing...');
+                }
+
+                // Save to file
+                response = await fetch('/api/config/save', { method: 'POST' });
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to save config to file');
+                }
+
+                console.log('Config saved successfully, starting test...');
+
+                // Now start the test
+                await startTest();
+
+            } catch (error) {
+                console.error('Error:', error);
+                alert('配置保存失败: ' + error.message);
+                startBtn.disabled = false;
+            }
+        }
+
         async function startTest() {
             if (isTesting) return;
 
@@ -675,7 +803,6 @@
                 // Poll for results and stats
                 pollResults();
                 pollStats();
-                pollWorkerPoolStats();
             } catch (error) {
                 console.error('Error:', error);
                 alert('启动测试失败: ' + error.message);
@@ -698,6 +825,7 @@
             isTesting = false;
             testStartTime = null;
             lastProgressUpdate = null;
+            finalResultsFetched = false;
             
             // Clear test timeout
             if (testTimeoutId) {
@@ -739,7 +867,6 @@
             document.getElementById('currentSpeed').textContent = '- Mbps';
             document.getElementById('avgSpeed').textContent = '- Mbps';
             document.getElementById('peakSpeed').textContent = '- Mbps';
-            document.getElementById('workerStatus').textContent = '0/0';
         }
 
         async function updateData() {
@@ -797,186 +924,6 @@
             }
         }
 
-        async function saveConfig() {
-            const saveBtn = document.getElementById('saveConfigBtn');
-            saveBtn.disabled = true;
-            saveBtn.textContent = '保存中...';
-
-            try {
-                // Collect all URLs from the form
-                const urls = {};
-                const urlInputs = document.querySelectorAll('[data-url-key]');
-                urlInputs.forEach(input => {
-                    const key = input.getAttribute('data-url-key');
-                    const value = input.value.trim();
-                    if (value) {
-                        urls[key] = value;
-                    }
-                });
-
-                // Collect selected datacenters
-                const selectedDatacenters = [];
-                const datacenterCheckboxes = document.querySelectorAll('input[name="datacenter"]:checked');
-                datacenterCheckboxes.forEach(checkbox => {
-                    selectedDatacenters.push(checkbox.value);
-                });
-
-                // Build config object matching the backend structure
-                const config = {
-                    test: {
-                        expected_servers: parseInt(document.getElementById('expectedServers').value) || 3,
-                        use_tls: document.getElementById('useTLS').checked,
-                        ip_type: document.getElementById('ipType').value || 'ipv4',
-                        bandwidth: parseFloat(document.getElementById('bandwidth').value) || 100,
-                        timeout: parseInt(document.getElementById('timeout').value) || 5,
-                        download_time: parseInt(document.getElementById('downloadTime').value) || 10,
-                        file_path: './',
-                        datacenter_filter: document.getElementById('datacenterMode').value || 'all',
-                        concurrent_workers: parseInt(document.getElementById('concurrentWorkers').value) || 10,
-                        sample_interval: 1
-                    },
-                    download: {
-                        urls: urls
-                    },
-                    ui: {
-                        datacenter_filter: document.getElementById('datacenterMode').value || 'all',
-                        result_format: 'table',
-                        auto_refresh: true,
-                        theme: 'light'
-                    },
-                    advanced: {
-                        concurrent_workers: parseInt(document.getElementById('concurrentWorkers').value) || 10,
-                        retry_attempts: parseInt(document.getElementById('maxRetries').value) || 3,
-                        log_level: 'info',
-                        enable_metrics: document.getElementById('enableMetrics').checked
-                    }
-                };
-
-                console.log('Saving config:', config);
-
-                // First update config in memory
-                let response = await fetch('/api/config', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(config)
-                });
-                
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error || 'Failed to update config');
-                }
-
-                // Update datacenter filter
-                const datacenterFilterResponse = await fetch('/api/datacenters/filter', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        mode: config.ui.datacenter_filter,
-                        selected: selectedDatacenters
-                    })
-                });
-
-                if (!datacenterFilterResponse.ok) {
-                    console.warn('Failed to update datacenter filter, but continuing...');
-                }
-
-                // Then save to file
-                response = await fetch('/api/config/save', { method: 'POST' });
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error || 'Failed to save config to file');
-                }
-
-                alert('配置已保存');
-            } catch (error) {
-                console.error('Error saving config:', error);
-                alert('保存失败: ' + error.message);
-            } finally {
-                saveBtn.disabled = false;
-                saveBtn.textContent = '保存配置';
-            }
-        }
-
-        // Config validation function
-        async function validateConfig() {
-            const validateBtn = document.getElementById('validateConfigBtn');
-            validateBtn.disabled = true;
-            validateBtn.textContent = '验证中...';
-
-            try {
-                // Collect all URLs from the form
-                const urls = {};
-                const urlInputs = document.querySelectorAll('[data-url-key]');
-                urlInputs.forEach(input => {
-                    const key = input.getAttribute('data-url-key');
-                    const value = input.value.trim();
-                    if (value) {
-                        urls[key] = value;
-                    }
-                });
-
-                // Collect selected datacenters
-                const selectedDatacenters = [];
-                const datacenterCheckboxes = document.querySelectorAll('input[name="datacenter"]:checked');
-                datacenterCheckboxes.forEach(checkbox => {
-                    selectedDatacenters.push(checkbox.value);
-                });
-
-                // Build config object matching the backend structure
-                const config = {
-                    test: {
-                        expected_servers: parseInt(document.getElementById('expectedServers').value) || 3,
-                        use_tls: document.getElementById('useTLS').checked,
-                        ip_type: document.getElementById('ipType').value || 'ipv4',
-                        bandwidth: parseFloat(document.getElementById('bandwidth').value) || 100,
-                        timeout: parseInt(document.getElementById('timeout').value) || 5,
-                        download_time: parseInt(document.getElementById('downloadTime').value) || 10,
-                        file_path: './',
-                        datacenter_filter: document.getElementById('datacenterMode').value || 'all',
-                        concurrent_workers: parseInt(document.getElementById('concurrentWorkers').value) || 10,
-                        sample_interval: 1
-                    },
-                    download: {
-                        urls: urls
-                    },
-                    ui: {
-                        datacenter_filter: document.getElementById('datacenterMode').value || 'all',
-                        result_format: 'table',
-                        auto_refresh: true,
-                        theme: 'light'
-                    },
-                    advanced: {
-                        concurrent_workers: parseInt(document.getElementById('concurrentWorkers').value) || 10,
-                        retry_attempts: parseInt(document.getElementById('maxRetries').value) || 3,
-                        log_level: 'info',
-                        enable_metrics: document.getElementById('enableMetrics').checked
-                    }
-                };
-
-                console.log('Validating config:', config);
-
-                const response = await fetch('/api/config/validate', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(config)
-                });
-                
-                const result = await response.json();
-                
-                if (response.ok && result.valid) {
-                    alert('✓ 配置验证通过！可以安全保存。');
-                } else {
-                    alert('✗ 配置验证失败：\n' + (result.error || '未知错误'));
-                }
-            } catch (error) {
-                console.error('Error validating config:', error);
-                alert('验证失败: ' + error.message);
-            } finally {
-                validateBtn.disabled = false;
-                validateBtn.textContent = '验证配置';
-            }
-        }
-
         // Export functions
         function showExportOptions() {
             document.getElementById('exportModal').style.display = 'block';
@@ -1023,6 +970,9 @@
 
                 const data = await response.json();
                 datacenters = data.datacenters || [];
+                
+                // Parse and sort datacenters from colo.txt format
+                datacenters = parseAndSortDatacenters(datacenters);
                 renderDatacenterList();
                 
                 // Set current filter mode
@@ -1042,6 +992,43 @@
             }
         }
 
+        function parseAndSortDatacenters(rawDatacenters) {
+            // Parse datacenters from backend ColoInfo objects
+            // Backend returns: { code: "TIA", location: "Tirana", region: "Europe" }
+            const parsed = rawDatacenters.map(dc => {
+                let code = '';
+                let location = '';
+                
+                // Handle both object and string formats
+                if (typeof dc === 'object' && dc !== null) {
+                    // Object format from backend
+                    code = dc.code || '';
+                    location = dc.location || '';
+                } else if (typeof dc === 'string') {
+                    // String format fallback: "Tirana,Europe-(TIA)"
+                    const codeMatch = dc.match(/\(([A-Z0-9]+)\)$/);
+                    if (codeMatch) {
+                        code = codeMatch[1];
+                        location = dc.replace(/\s*\([A-Z0-9]+\)\s*$/, '').trim();
+                    } else {
+                        code = dc;
+                        location = dc;
+                    }
+                }
+                
+                return {
+                    code: code,
+                    location: location,
+                    displayName: `${code} - ${location}`
+                };
+            });
+            
+            // Sort by code alphabetically (backend already sorts, but ensure it here too)
+            parsed.sort((a, b) => a.code.localeCompare(b.code));
+            
+            return parsed;
+        }
+
         function renderDatacenterList() {
             const container = document.getElementById('datacenterList');
             
@@ -1050,15 +1037,15 @@
                 return;
             }
 
-            let html = '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px;">';
+            let html = '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px;">';
             
             datacenters.forEach(dc => {
                 html += `
-                    <label style="display: flex; align-items: center; padding: 8px; border: 1px solid #e2e8f0; border-radius: 4px; cursor: pointer; background: white;">
-                        <input type="checkbox" name="datacenter" value="${dc.code}" onchange="updateSelectedCount()" style="margin-right: 8px;">
-                        <div>
-                            <div style="font-weight: 600; font-size: 12px;">${dc.code}</div>
-                            <div style="font-size: 11px; color: #666;">${dc.name}</div>
+                    <label style="display: flex; align-items: center; padding: 10px; border: 1px solid #e2e8f0; border-radius: 4px; cursor: pointer; background: white; transition: all 0.2s ease;">
+                        <input type="checkbox" name="datacenter" value="${dc.code}" onchange="updateSelectedCount()" style="margin-right: 10px; width: 18px; height: 18px; cursor: pointer;">
+                        <div style="flex: 1;">
+                            <div style="font-weight: 700; font-size: 13px; color: #667eea;">${dc.code}</div>
+                            <div style="font-size: 12px; color: #666; margin-top: 2px;">${dc.location}</div>
                         </div>
                     </label>
                 `;
@@ -1163,7 +1150,6 @@
             metricsInterval = setInterval(async () => {
                 await updateMetrics();
                 await updatePerformanceStats();
-                await updateErrorStats();
             }, 2000);
         }
 
@@ -1200,81 +1186,50 @@
 
         async function updatePerformanceStats() {
             try {
-                const response = await fetch('/api/metrics/performance');
-                if (!response.ok) return;
-
-                const stats = await response.json();
+                // Get stats from /api/stats endpoint
+                const statsResponse = await fetch('/api/stats');
+                if (!statsResponse.ok) return;
+                const stats = await statsResponse.json();
                 
-                document.getElementById('testsSuccessful').textContent = stats.tests_successful || 0;
-                document.getElementById('testsFailed').textContent = stats.tests_failed || 0;
-                document.getElementById('testsTotal').textContent = stats.tests_completed || 0;
+                // Extract qualified count from progress display (format: "X/Y")
+                const progressText = document.getElementById('progress').textContent;
+                const qualifiedCount = parseInt(progressText.split('/')[0]) || 0;
                 
-                document.getElementById('avgLatency').textContent = stats.average_latency ? stats.average_latency.toFixed(2) + ' ms' : '- ms';
-                document.getElementById('minLatency').textContent = stats.min_latency && stats.min_latency < 999999 ? stats.min_latency.toFixed(2) + ' ms' : '- ms';
-                document.getElementById('maxLatency').textContent = stats.max_latency ? stats.max_latency.toFixed(2) + ' ms' : '- ms';
+                // Get error stats for failures (network + timeout errors)
+                const errorResponse = await fetch('/api/errors/stats');
+                let totalErrors = 0;
+                if (errorResponse.ok) {
+                    const errorData = await errorResponse.json();
+                    const errorStats = errorData.error_stats || {};
+                    const networkErrors = errorStats.network?.total_count || 0;
+                    const timeoutErrors = errorStats.timeout?.total_count || 0;
+                    totalErrors = networkErrors + timeoutErrors;
+                }
                 
-                document.getElementById('peakSpeed').textContent = stats.peak_speed ? stats.peak_speed.toFixed(2) + ' Mbps' : '- Mbps';
+                // Update test statistics
+                // 成功 = 从测试进度中提取的有效服务器数
+                // 总计 = Total (已读取的IP总数)
+                // 失败 = 网络错误 + 超时错误
+                document.getElementById('testsSuccessful').textContent = qualifiedCount;
+                document.getElementById('testsFailed').textContent = totalErrors;
+                document.getElementById('testsTotal').textContent = stats.Total || 0;
                 
-                const dataTransferMB = stats.total_data_transfer ? (stats.total_data_transfer / 1024 / 1024).toFixed(2) : '0';
+                // Get performance metrics for other stats
+                const metricsResponse = await fetch('/api/metrics/performance');
+                if (!metricsResponse.ok) return;
+                const metrics = await metricsResponse.json();
+                
+                document.getElementById('avgLatency').textContent = metrics.average_latency ? metrics.average_latency.toFixed(2) + ' ms' : '- ms';
+                document.getElementById('minLatency').textContent = metrics.min_latency && metrics.min_latency < 999999 ? metrics.min_latency.toFixed(2) + ' ms' : '- ms';
+                document.getElementById('maxLatency').textContent = metrics.max_latency ? metrics.max_latency.toFixed(2) + ' ms' : '- ms';
+                
+                document.getElementById('peakSpeed').textContent = metrics.peak_speed ? metrics.peak_speed.toFixed(2) + ' Mbps' : '- Mbps';
+                
+                const dataTransferMB = metrics.total_data_transfer ? (metrics.total_data_transfer / 1024 / 1024).toFixed(2) : '0';
                 document.getElementById('dataTransfer').textContent = dataTransferMB + ' MB';
                 
             } catch (error) {
                 console.error('Error updating performance stats:', error);
-            }
-        }
-
-        async function updateErrorStats() {
-            try {
-                const response = await fetch('/api/errors/stats');
-                if (!response.ok) return;
-
-                const data = await response.json();
-                const errorStats = data.error_stats || {};
-                
-                document.getElementById('networkErrors').textContent = errorStats.network?.total_count || 0;
-                document.getElementById('timeoutErrors').textContent = errorStats.timeout?.total_count || 0;
-                
-                const otherErrors = Object.keys(errorStats).reduce((sum, key) => {
-                    if (key !== 'network' && key !== 'timeout') {
-                        return sum + (errorStats[key]?.total_count || 0);
-                    }
-                    return sum;
-                }, 0);
-                document.getElementById('otherErrors').textContent = otherErrors;
-                
-                document.getElementById('degradedMode').textContent = data.degraded_mode ? '是' : '否';
-                
-                // Update memory usage
-                const memoryResponse = await fetch('/api/results/memory');
-                if (memoryResponse.ok) {
-                    const memoryData = await memoryResponse.json();
-                    const memoryMB = memoryData.estimated_memory_mb ? memoryData.estimated_memory_mb.toFixed(1) : '0';
-                    document.getElementById('memoryUsage').textContent = memoryMB + ' MB';
-                }
-                
-            } catch (error) {
-                console.error('Error updating error stats:', error);
-            }
-        }
-
-        async function pollWorkerPoolStats() {
-            if (!isTesting) return;
-
-            try {
-                const response = await fetch('/api/workerpool/stats');
-                if (!response.ok) throw new Error('Failed to fetch worker pool stats');
-
-                const stats = await response.json();
-                
-                document.getElementById('workerStatus').textContent = `${stats.active_workers}/${stats.total_workers}`;
-
-                // Continue polling
-                setTimeout(pollWorkerPoolStats, 1000);
-            } catch (error) {
-                console.error('Error:', error);
-                if (isTesting) {
-                    setTimeout(pollWorkerPoolStats, 1000);
-                }
             }
         }
 
@@ -1333,7 +1288,7 @@
                 
                 // Load advanced config - use retry_attempts instead of max_retries
                 document.getElementById('concurrentWorkers').value = currentConfig.advanced?.concurrent_workers || 10;
-                document.getElementById('maxRetries').value = currentConfig.advanced?.retry_attempts || 3;
+                document.getElementById('maxRetries').value = currentConfig.advanced?.retry_attempts !== undefined ? currentConfig.advanced.retry_attempts : -1;
                 // Note: retry_delay is not in the backend config structure, so we'll use a default
                 document.getElementById('retryDelay').value = 2; // Default value
                 
@@ -1346,8 +1301,8 @@
                 // Load download URLs
                 renderURLs(currentConfig.download?.urls || {});
                 
-                // Load datacenters
-                loadDatacenters();
+                // Load datacenters - wait for it to complete
+                await loadDatacenters();
             } catch (error) {
                 console.error('Error loading config:', error);
                 // Set default values if loading fails
@@ -1358,7 +1313,7 @@
                 document.getElementById('timeout').value = 5;
                 document.getElementById('downloadTime').value = 10;
                 document.getElementById('concurrentWorkers').value = 10;
-                document.getElementById('maxRetries').value = 3;
+                document.getElementById('maxRetries').value = -1;
                 document.getElementById('retryDelay').value = 2;
                 document.getElementById('enableMetrics').checked = false;
                 document.getElementById('enableErrorHandling').checked = false;
@@ -1390,8 +1345,6 @@
         }
 
         async function pollResults() {
-            if (!isTesting) return;
-
             try {
                 const response = await fetch('/api/results');
                 if (!response.ok) throw new Error('Failed to fetch results');
@@ -1403,6 +1356,25 @@
                 // Continue polling only if still testing
                 if (isTesting) {
                     setTimeout(pollResults, 1000);
+                } else {
+                    // Final fetch after testing stops to ensure we get the last result
+                    // Only do this once by checking if we've already done a final fetch
+                    if (!finalResultsFetched) {
+                        finalResultsFetched = true;
+                        // Wait a bit to ensure backend has finished writing the last result
+                        setTimeout(async () => {
+                            try {
+                                const finalResponse = await fetch('/api/results');
+                                if (finalResponse.ok) {
+                                    results = await finalResponse.json();
+                                    renderResults();
+                                    updateStats();
+                                }
+                            } catch (error) {
+                                console.error('Error fetching final results:', error);
+                            }
+                        }, 500);
+                    }
                 }
             } catch (error) {
                 console.error('Error polling results:', error);
@@ -1422,12 +1394,13 @@
 
                 const stats = await response.json();
                 
-                // Update progress
+                // Update progress - show qualified servers / expected servers
+                const expectedServers = currentConfig.test?.expected_servers || 3;
                 if (stats.Total > 0) {
-                    document.getElementById('progress').textContent = `${stats.Completed}/${stats.Total}`;
+                    document.getElementById('progress').textContent = `${stats.Qualified}/${expectedServers}`;
                     
                     // Check for progress stall (no progress for 5 minutes)
-                    if (stats.Completed > 0) {
+                    if (stats.Qualified > 0) {
                         lastProgressUpdate = Date.now();
                     } else if (lastProgressUpdate && (Date.now() - lastProgressUpdate) > 5 * 60 * 1000) {
                         console.warn('No progress detected for 5 minutes, test may be stalled');
@@ -1436,7 +1409,7 @@
                 }
 
                 // Update test status
-                if (stats.Completed === stats.Total && stats.Total > 0) {
+                if (stats.Qualified >= expectedServers && stats.Total > 0) {
                     document.getElementById('testStatus').textContent = '已完成';
                     stopTestUI();
                 } else if (stats.CurrentIP) {
@@ -1519,8 +1492,9 @@
         }
 
         function updateStats() {
+            const expectedServers = currentConfig.test?.expected_servers || 3;
             const completed = results.filter(r => r.Status === '已完成').length;
-            document.getElementById('progress').textContent = `${completed}/${results.length}`;
+            document.getElementById('progress').textContent = `${completed}/${expectedServers}`;
 
             const speeds = results
                 .filter(r => r.Status === '已完成' && r.Speed !== '-')
@@ -1538,65 +1512,6 @@
         document.getElementById('toggleAdvanced').addEventListener('click', toggleAdvancedConfig);
         document.getElementById('resultSort').addEventListener('change', refreshResults);
         document.getElementById('resultOrder').addEventListener('change', refreshResults);
-
-        // Debug function
-        async function showDebugInfo() {
-            try {
-                const response = await fetch('/api/debug');
-                if (!response.ok) throw new Error('Failed to get debug info');
-                
-                const debugInfo = await response.json();
-                
-                // Create a formatted debug display
-                let debugText = `=== 调试信息 ===\n`;
-                debugText += `时间: ${new Date(debugInfo.timestamp).toLocaleString()}\n`;
-                debugText += `测试状态: ${debugInfo.testing ? '进行中' : '已停止'}\n\n`;
-                
-                debugText += `=== 统计信息 ===\n`;
-                debugText += `总数: ${debugInfo.stats.Total}\n`;
-                debugText += `已完成: ${debugInfo.stats.Completed}\n`;
-                debugText += `合格数: ${debugInfo.stats.Qualified}\n`;
-                debugText += `当前IP: ${debugInfo.stats.CurrentIP || '无'}\n`;
-                debugText += `当前速度: ${debugInfo.stats.CurrentSpeed || '无'}\n\n`;
-                
-                debugText += `=== 工作池状态 ===\n`;
-                debugText += `工作线程数: ${debugInfo.worker_stats.worker_count}\n`;
-                debugText += `活跃线程: ${debugInfo.worker_stats.active_workers}\n`;
-                debugText += `运行状态: ${debugInfo.worker_stats.running ? '运行中' : '已停止'}\n`;
-                debugText += `任务队列: ${debugInfo.worker_stats.job_queue_size}\n`;
-                debugText += `结果队列: ${debugInfo.worker_stats.result_queue_size}\n\n`;
-                
-                debugText += `=== 配置信息 ===\n`;
-                debugText += `IP类型: ${debugInfo.config.ip_type}\n`;
-                debugText += `并发线程: ${debugInfo.config.concurrent_workers}\n`;
-                debugText += `超时时间: ${debugInfo.config.timeout}秒\n`;
-                debugText += `下载时间: ${debugInfo.config.download_time}秒\n`;
-                debugText += `使用TLS: ${debugInfo.config.use_tls ? '是' : '否'}\n\n`;
-                
-                debugText += `=== 管理器状态 ===\n`;
-                debugText += `URL管理器: ${debugInfo.managers.has_urls ? '已加载' : '未加载'} (${debugInfo.managers.url_count}个)\n`;
-                debugText += `数据中心管理器: ${debugInfo.managers.has_colos ? '已加载' : '未加载'} (${debugInfo.managers.colo_count}个)\n`;
-                debugText += `筛选模式: ${debugInfo.managers.filter_mode}\n`;
-                debugText += `选中数据中心: ${debugInfo.managers.selected_colos.length}个\n\n`;
-                
-                if (debugInfo.recent_results && debugInfo.recent_results.length > 0) {
-                    debugText += `=== 最近结果 (${debugInfo.recent_results.length}个) ===\n`;
-                    debugInfo.recent_results.forEach((result, index) => {
-                        debugText += `${index + 1}. ${result.IP} - ${result.Status} - ${result.Speed}Mbps - ${result.DataCenter}\n`;
-                    });
-                }
-                
-                // Show in alert (you could also create a modal for better display)
-                alert(debugText);
-                
-                // Also log to console for easier copying
-                console.log('Debug Info:', debugInfo);
-                
-            } catch (error) {
-                console.error('Error getting debug info:', error);
-                alert('获取调试信息失败: ' + error.message);
-            }
-        }
 
         // Initial load
         window.addEventListener('load', () => {

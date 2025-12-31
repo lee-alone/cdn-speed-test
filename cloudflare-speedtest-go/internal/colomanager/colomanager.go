@@ -73,20 +73,22 @@ func (dcm *DataCenterManager) LoadColos() error {
 			continue
 		}
 
-		// Parse format: location,code or location,code,region
+		// Parse format: Location,Region-(CODE)
+		// Example: "Tirana,Europe-(TIA)"
 		parts := strings.Split(line, ",")
 		if len(parts) >= 2 {
 			location := strings.TrimSpace(parts[0])
-			code := strings.TrimSpace(parts[1])
-			region := ""
-			if len(parts) >= 3 {
-				region = strings.TrimSpace(parts[2])
-			} else {
-				region = inferRegion(location)
-			}
+			regionAndCode := strings.TrimSpace(parts[1])
 
-			// Extract code abbreviation (e.g., "LAX" from "LAX (Los Angeles)")
-			codeAbbr := extractCodeAbbr(code)
+			// Extract code from "Region-(CODE)" format
+			// Example: "Europe-(TIA)" -> code="TIA", region="Europe"
+			codeAbbr := extractCodeFromRegion(regionAndCode)
+			region := extractRegionFromString(regionAndCode)
+
+			if codeAbbr == "" {
+				// Fallback: if extraction fails, skip this line
+				continue
+			}
 
 			coloInfo := ColoInfo{
 				Code:     codeAbbr,
@@ -103,13 +105,54 @@ func (dcm *DataCenterManager) LoadColos() error {
 		return fmt.Errorf("error reading colo.txt: %w", err)
 	}
 
+	// Sort the list by code alphabetically
+	sortColosByCode(dcm.list)
+
 	dcm.lastLoaded = time.Now()
 	dcm.cacheValid = true
 
 	return nil
 }
 
-// extractCodeAbbr extracts the abbreviation from code string
+// extractCodeFromRegion extracts the code from "Region-(CODE)" format
+// Example: "Europe-(TIA)" -> "TIA"
+func extractCodeFromRegion(regionAndCode string) string {
+	// Find the code in parentheses
+	startIdx := strings.LastIndex(regionAndCode, "(")
+	endIdx := strings.LastIndex(regionAndCode, ")")
+
+	if startIdx != -1 && endIdx != -1 && endIdx > startIdx {
+		code := regionAndCode[startIdx+1 : endIdx]
+		return strings.TrimSpace(code)
+	}
+	return ""
+}
+
+// extractRegionFromString extracts the region from "Region-(CODE)" format
+// Example: "Europe-(TIA)" -> "Europe"
+func extractRegionFromString(regionAndCode string) string {
+	// Find the opening parenthesis
+	idx := strings.Index(regionAndCode, "-")
+	if idx != -1 {
+		return strings.TrimSpace(regionAndCode[:idx])
+	}
+	return regionAndCode
+}
+
+// sortColosByCode sorts the colo list by code alphabetically
+func sortColosByCode(colos []ColoInfo) {
+	// Simple bubble sort for small lists, or use sort.Slice for larger ones
+	for i := 0; i < len(colos); i++ {
+		for j := i + 1; j < len(colos); j++ {
+			if colos[j].Code < colos[i].Code {
+				// Swap
+				colos[i], colos[j] = colos[j], colos[i]
+			}
+		}
+	}
+}
+
+// extractCodeAbbr extracts the abbreviation from code string (deprecated, kept for compatibility)
 func extractCodeAbbr(code string) string {
 	// Remove parentheses and extra info
 	if idx := strings.Index(code, "("); idx != -1 {

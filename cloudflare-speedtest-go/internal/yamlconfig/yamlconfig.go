@@ -86,7 +86,7 @@ func DefaultConfig() *Config {
 		},
 		Advanced: AdvancedConfig{
 			ConcurrentWorkers: 10,
-			RetryAttempts:     3,
+			RetryAttempts:     -1, // -1 means unlimited retries
 			LogLevel:          "info",
 			EnableMetrics:     true,
 		},
@@ -363,11 +363,11 @@ func (cfg *Config) Validate() error {
 		})
 	}
 
-	if cfg.Advanced.RetryAttempts < 0 || cfg.Advanced.RetryAttempts > 10 {
+	if cfg.Advanced.RetryAttempts < -1 || cfg.Advanced.RetryAttempts > 10 {
 		errors = append(errors, ValidationError{
 			Field:   "advanced.retry_attempts",
 			Value:   cfg.Advanced.RetryAttempts,
-			Message: "must be between 0 and 10",
+			Message: "must be -1 (unlimited) or between 0 and 10",
 		})
 	}
 
