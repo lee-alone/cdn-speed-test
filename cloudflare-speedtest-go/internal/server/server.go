@@ -138,6 +138,40 @@ func (s *Server) setupRoutes() {
 
 	// HTML routes
 	s.mux.HandleFunc("GET /", s.indexHandler)
+
+	// Static file routes for split frontend
+	s.mux.HandleFunc("GET /styles.css", s.staticFileHandler)
+	s.mux.HandleFunc("GET /api.js", s.staticFileHandler)
+	s.mux.HandleFunc("GET /chart.js", s.staticFileHandler)
+	s.mux.HandleFunc("GET /ui.js", s.staticFileHandler)
+	s.mux.HandleFunc("GET /app.js", s.staticFileHandler)
+}
+
+// staticFileHandler serves individual static files from embedded FS
+func (s *Server) staticFileHandler(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Path
+	if path == "/" {
+		s.indexHandler(w, r)
+		return
+	}
+
+	// Remove leading slash and prepend static/
+	filePath := "static" + path
+
+	data, err := s.staticFS.ReadFile(filePath)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	// Set content type based on extension
+	if strings.HasSuffix(path, ".css") {
+		w.Header().Set("Content-Type", "text/css")
+	} else if strings.HasSuffix(path, ".js") {
+		w.Header().Set("Content-Type", "application/javascript")
+	}
+
+	w.Write(data)
 }
 
 // IsTesting returns whether a test is running
