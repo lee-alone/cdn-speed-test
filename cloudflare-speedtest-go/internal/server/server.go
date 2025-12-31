@@ -812,6 +812,13 @@ func (s *Server) runSpeedTestPhase(validIPs []string, domain, filePath string) {
 			continue
 		}
 
+		// Check bandwidth requirement to set status
+		expectedBandwidth := s.config.Test.Bandwidth
+		speedVal, _ := strconv.ParseFloat(speedResult.Speed, 64)
+		if expectedBandwidth > 0 && speedVal < expectedBandwidth {
+			speedResult.Status = "低速"
+		}
+
 		// Create successful result
 		result := &models.SpeedTestResult{
 			IP:         ip,
@@ -836,7 +843,6 @@ func (s *Server) runSpeedTestPhase(validIPs []string, domain, filePath string) {
 		// Check if we found enough qualified servers (with bandwidth requirement)
 		qualifiedResults := s.resultManager.GetQualifiedResults()
 		qualifiedCount := 0
-		expectedBandwidth := s.config.Test.Bandwidth
 
 		for _, r := range qualifiedResults {
 			// Speed is string like "123.45", ignore errors as they should be valid floats

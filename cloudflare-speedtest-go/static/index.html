@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -261,6 +262,12 @@
             color: #7c2d12;
         }
 
+        .status-low-speed {
+            background: #fefcbf;
+            color: #975a16;
+        }
+
+
         .status-error {
             background: #fed7d7;
             color: #742a2a;
@@ -308,12 +315,14 @@
                 font-size: 12px;
             }
 
-            th, td {
+            th,
+            td {
                 padding: 8px;
             }
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <h1>🚀 Cloudflare IP 优选测速</h1>
@@ -321,7 +330,7 @@
         <!-- Configuration Panel -->
         <div class="config-panel">
             <h3 style="margin-top: 0; color: #333;">测试配置</h3>
-            
+
             <div class="config-row">
                 <div class="config-item">
                     <label for="ipType">IP类型</label>
@@ -364,7 +373,7 @@
 
             <!-- Data Center Selection -->
             <h3 style="margin-top: 20px; color: #333;">数据中心筛选</h3>
-            
+
             <div class="config-row">
                 <div class="config-item">
                     <label for="datacenterMode">筛选模式</label>
@@ -378,7 +387,8 @@
             <div id="datacenterSelection" style="display: none; margin-top: 15px;">
                 <div class="config-item">
                     <label>选择数据中心 (可多选)</label>
-                    <div id="datacenterList" style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; padding: 10px; background: white;">
+                    <div id="datacenterList"
+                        style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; padding: 10px; background: white;">
                         <div style="text-align: center; color: #999; padding: 20px;">加载中...</div>
                     </div>
                     <div style="margin-top: 10px; font-size: 12px; color: #666;">
@@ -389,14 +399,16 @@
 
             <!-- Advanced Configuration -->
             <div style="margin-top: 20px;">
-                <button type="button" id="toggleAdvanced" class="btn-secondary" style="font-size: 12px; padding: 8px 16px;">
+                <button type="button" id="toggleAdvanced" class="btn-secondary"
+                    style="font-size: 12px; padding: 8px 16px;">
                     显示高级配置 ▼
                 </button>
             </div>
 
-            <div id="advancedConfig" style="display: none; margin-top: 15px; padding: 15px; background: #f9f9f9; border-radius: 4px;">
+            <div id="advancedConfig"
+                style="display: none; margin-top: 15px; padding: 15px; background: #f9f9f9; border-radius: 4px;">
                 <h4 style="margin-top: 0; color: #333;">高级配置</h4>
-                
+
                 <div class="config-row">
                     <div class="config-item">
                         <label for="maxRetries">最大重试次数 (-1=无限)</label>
@@ -420,13 +432,14 @@
                 </div>
 
                 <h4 style="margin-top: 20px; color: #333;">下载地址配置</h4>
-                
+
                 <div id="urlsContainer"></div>
             </div>
 
             <h3 style="margin-top: 20px; color: #333;">数据文件状态</h3>
-            
-            <div id="filesStatusContainer" style="background: white; padding: 15px; border-radius: 4px; margin-bottom: 20px;"></div>
+
+            <div id="filesStatusContainer"
+                style="background: white; padding: 15px; border-radius: 4px; margin-bottom: 20px;"></div>
         </div>
 
         <!-- Button Group -->
@@ -439,8 +452,10 @@
         </div>
 
         <!-- Export Options Modal -->
-        <div id="exportModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;">
-            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 8px; min-width: 300px;">
+        <div id="exportModal"
+            style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;">
+            <div
+                style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 8px; min-width: 300px;">
                 <h3 style="margin-top: 0;">导出测试结果</h3>
                 <div style="margin: 20px 0;">
                     <label>导出格式:</label>
@@ -495,9 +510,11 @@
         </div>
 
         <!-- Real-time Speed Chart -->
-        <div id="speedChartContainer" style="display: none; margin: 20px 0; padding: 20px; background: #f5f5f5; border-radius: 8px;">
+        <div id="speedChartContainer"
+            style="display: none; margin: 20px 0; padding: 20px; background: #f5f5f5; border-radius: 8px;">
             <h3 style="margin-top: 0; color: #333;">实时速度图表</h3>
-            <canvas id="speedChart" width="800" height="200" style="width: 100%; max-width: 800px; height: 200px; background: white; border-radius: 4px;"></canvas>
+            <canvas id="speedChart" width="800" height="200"
+                style="width: 100%; max-width: 800px; height: 200px; background: white; border-radius: 4px;"></canvas>
             <div style="margin-top: 10px; display: flex; justify-content: space-between; font-size: 12px; color: #666;">
                 <span>平滑速度: <span id="smoothedSpeed">- Mbps</span></span>
                 <span>样本数: <span id="sampleCount">0</span></span>
@@ -508,20 +525,21 @@
         <!-- Performance Metrics -->
         <div id="metricsContainer" style="display: none; margin: 20px 0;">
             <h3 style="color: #333;">性能指标</h3>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
+            <div
+                style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
                 <div style="background: white; padding: 15px; border-radius: 4px; border-left: 4px solid #667eea;">
                     <div style="font-size: 12px; color: #666; margin-bottom: 5px;">测试统计</div>
                     <div style="font-size: 14px;">
-                        成功: <span id="testsSuccessful">0</span> / 
-                        失败: <span id="testsFailed">0</span> / 
+                        成功: <span id="testsSuccessful">0</span> /
+                        失败: <span id="testsFailed">0</span> /
                         总计: <span id="testsTotal">0</span>
                     </div>
                 </div>
                 <div style="background: white; padding: 15px; border-radius: 4px; border-left: 4px solid #48bb78;">
                     <div style="font-size: 12px; color: #666; margin-bottom: 5px;">延迟统计</div>
                     <div style="font-size: 14px;">
-                        平均: <span id="avgLatency">- ms</span> / 
-                        最小: <span id="minLatency">- ms</span> / 
+                        平均: <span id="avgLatency">- ms</span> /
+                        最小: <span id="minLatency">- ms</span> /
                         最大: <span id="maxLatency">- ms</span>
                     </div>
                 </div>
@@ -542,8 +560,10 @@
                         <option value="desc">降序</option>
                         <option value="asc">升序</option>
                     </select>
-                    <button class="btn-secondary" onclick="refreshResults()" style="padding: 5px 10px; font-size: 12px;">刷新</button>
-                    <button class="btn-secondary" onclick="toggleQualifiedOnly()" id="qualifiedToggle" style="padding: 5px 10px; font-size: 12px;">仅显示合格</button>
+                    <button class="btn-secondary" onclick="refreshResults()"
+                        style="padding: 5px 10px; font-size: 12px;">刷新</button>
+                    <button class="btn-secondary" onclick="toggleQualifiedOnly()" id="qualifiedToggle"
+                        style="padding: 5px 10px; font-size: 12px;">仅显示合格</button>
                 </div>
             </div>
             <div id="resultsContainer">
@@ -570,41 +590,41 @@
         function initSpeedChart() {
             const canvas = document.getElementById('speedChart');
             const ctx = canvas.getContext('2d');
-            
+
             speedChart = {
                 canvas: canvas,
                 ctx: ctx,
                 data: [],
                 maxPoints: 50,
-                
-                addPoint: function(speed, timestamp) {
+
+                addPoint: function (speed, timestamp) {
                     this.data.push({ speed: speed, timestamp: timestamp });
                     if (this.data.length > this.maxPoints) {
                         this.data.shift();
                     }
                     this.draw();
                 },
-                
-                draw: function() {
+
+                draw: function () {
                     const ctx = this.ctx;
                     const canvas = this.canvas;
                     const data = this.data;
-                    
+
                     // Clear canvas
                     ctx.clearRect(0, 0, canvas.width, canvas.height);
-                    
+
                     if (data.length < 2) return;
-                    
+
                     // Find max speed for scaling
                     const maxSpeed = Math.max(...data.map(d => d.speed), 10);
                     const padding = 40;
                     const chartWidth = canvas.width - padding * 2;
                     const chartHeight = canvas.height - padding * 2;
-                    
+
                     // Draw grid
                     ctx.strokeStyle = '#e2e8f0';
                     ctx.lineWidth = 1;
-                    
+
                     // Horizontal grid lines
                     for (let i = 0; i <= 5; i++) {
                         const y = padding + (chartHeight / 5) * i;
@@ -612,7 +632,7 @@
                         ctx.moveTo(padding, y);
                         ctx.lineTo(canvas.width - padding, y);
                         ctx.stroke();
-                        
+
                         // Labels
                         ctx.fillStyle = '#666';
                         ctx.font = '12px Arial';
@@ -620,31 +640,31 @@
                         const value = (maxSpeed * (5 - i) / 5).toFixed(1);
                         ctx.fillText(value + ' Mbps', padding - 5, y + 4);
                     }
-                    
+
                     // Draw speed line
                     ctx.strokeStyle = '#667eea';
                     ctx.lineWidth = 2;
                     ctx.beginPath();
-                    
+
                     data.forEach((point, index) => {
                         const x = padding + (chartWidth / (data.length - 1)) * index;
                         const y = padding + chartHeight - (point.speed / maxSpeed) * chartHeight;
-                        
+
                         if (index === 0) {
                             ctx.moveTo(x, y);
                         } else {
                             ctx.lineTo(x, y);
                         }
                     });
-                    
+
                     ctx.stroke();
-                    
+
                     // Draw points
                     ctx.fillStyle = '#667eea';
                     data.forEach((point, index) => {
                         const x = padding + (chartWidth / (data.length - 1)) * index;
                         const y = padding + chartHeight - (point.speed / maxSpeed) * chartHeight;
-                        
+
                         ctx.beginPath();
                         ctx.arc(x, y, 3, 0, 2 * Math.PI);
                         ctx.fill();
@@ -717,9 +737,9 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(config)
                 });
-                
+
                 const validateResult = await validateResponse.json();
-                
+
                 if (!validateResponse.ok || !validateResult.valid) {
                     throw new Error(validateResult.error || '配置验证失败');
                 }
@@ -730,7 +750,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(config)
                 });
-                
+
                 if (!response.ok) {
                     const errorData = await response.json();
                     throw new Error(errorData.error || 'Failed to update config');
@@ -826,17 +846,17 @@
             testStartTime = null;
             lastProgressUpdate = null;
             finalResultsFetched = false;
-            
+
             // Clear test timeout
             if (testTimeoutId) {
                 clearTimeout(testTimeoutId);
                 testTimeoutId = null;
             }
-            
+
             document.getElementById('startBtn').disabled = false;
             document.getElementById('stopBtn').disabled = true;
             document.getElementById('testStatus').textContent = '已停止';
-            
+
             if (metricsInterval) {
                 clearInterval(metricsInterval);
                 metricsInterval = null;
@@ -851,7 +871,7 @@
                 results = [];
                 renderResults();
                 resetStats();
-                
+
                 // Clear speed chart
                 if (speedChart) {
                     speedChart.data = [];
@@ -874,14 +894,14 @@
                 // First check if data files exist
                 const statusResponse = await fetch('/api/status');
                 if (!statusResponse.ok) throw new Error('Failed to check status');
-                
+
                 const statusData = await statusResponse.json();
                 console.log('Status data:', statusData);
-                
+
                 // If missingFiles is empty, all files exist
                 const hasAllFiles = statusData.missing_files && statusData.missing_files.length === 0;
                 console.log('Has all files:', hasAllFiles, 'Missing files:', statusData.missing_files);
-                
+
                 // If all data files exist, show confirmation dialog
                 if (hasAllFiles) {
                     const confirmed = confirm('本地已存在数据文件，是否要覆盖更新？\n\n点击"确定"将下载最新数据并覆盖原文件。');
@@ -889,7 +909,7 @@
                         return;
                     }
                 }
-                
+
                 // Proceed with update
                 const updateBtn = document.getElementById('updateBtn');
                 updateBtn.disabled = true;
@@ -900,25 +920,25 @@
                 };
                 console.log('Sending update request with body:', requestBody);
 
-                const response = await fetch('/api/update', { 
+                const response = await fetch('/api/update', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify(requestBody)
                 });
-                
+
                 if (!response.ok) throw new Error('Failed to update data');
 
                 const data = await response.json();
                 console.log('Update response:', data);
-                
+
                 if (data.files > 0) {
                     alert('数据更新已开始，请稍候...');
                 } else {
                     alert('所有数据文件已是最新');
                 }
-                
+
                 // Check status after a delay
                 setTimeout(checkStatus, 2000);
             } catch (error) {
@@ -944,24 +964,24 @@
             const format = document.getElementById('exportFormat').value;
             const sort = document.getElementById('exportSort').value;
             const ascending = document.getElementById('exportAscending').checked;
-            
+
             const order = ascending ? 'asc' : 'desc';
             const url = `/api/results/export/${format}?sort=${sort}&order=${order}`;
-            
+
             try {
                 const response = await fetch(url);
                 if (!response.ok) throw new Error('Export failed');
-                
+
                 const blob = await response.blob();
                 const downloadUrl = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = downloadUrl;
-                a.download = `cloudflare-speedtest-${new Date().toISOString().slice(0,19).replace(/:/g, '-')}.${format}`;
+                a.download = `cloudflare-speedtest-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.${format}`;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
                 window.URL.revokeObjectURL(downloadUrl);
-                
+
                 hideExportOptions();
             } catch (error) {
                 console.error('Export error:', error);
@@ -977,15 +997,15 @@
 
                 const data = await response.json();
                 datacenters = data.datacenters || [];
-                
+
                 // Parse and sort datacenters from colo.txt format
                 datacenters = parseAndSortDatacenters(datacenters);
                 renderDatacenterList();
-                
+
                 // Set current filter mode
                 document.getElementById('datacenterMode').value = data.filter_mode || 'all';
                 toggleDatacenterSelection();
-                
+
                 // Set selected datacenters
                 if (data.selected && data.selected.length > 0) {
                     data.selected.forEach(code => {
@@ -1005,7 +1025,7 @@
             const parsed = rawDatacenters.map(dc => {
                 let code = '';
                 let location = '';
-                
+
                 // Handle both object and string formats
                 if (typeof dc === 'object' && dc !== null) {
                     // Object format from backend
@@ -1022,30 +1042,30 @@
                         location = dc;
                     }
                 }
-                
+
                 return {
                     code: code,
                     location: location,
                     displayName: `${code} - ${location}`
                 };
             });
-            
+
             // Sort by code alphabetically (backend already sorts, but ensure it here too)
             parsed.sort((a, b) => a.code.localeCompare(b.code));
-            
+
             return parsed;
         }
 
         function renderDatacenterList() {
             const container = document.getElementById('datacenterList');
-            
+
             if (!datacenters || datacenters.length === 0) {
                 container.innerHTML = '<div style="text-align: center; color: #999; padding: 20px;">暂无数据中心信息</div>';
                 return;
             }
 
             let html = '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px;">';
-            
+
             datacenters.forEach(dc => {
                 html += `
                     <label style="display: flex; align-items: center; padding: 10px; border: 1px solid #e2e8f0; border-radius: 4px; cursor: pointer; background: white; transition: all 0.2s ease;">
@@ -1057,7 +1077,7 @@
                     </label>
                 `;
             });
-            
+
             html += '</div>';
             container.innerHTML = html;
         }
@@ -1065,7 +1085,7 @@
         function toggleDatacenterSelection() {
             const mode = document.getElementById('datacenterMode').value;
             const container = document.getElementById('datacenterSelection');
-            
+
             if (mode === 'selected') {
                 container.style.display = 'block';
                 if (datacenters.length === 0) {
@@ -1085,7 +1105,7 @@
         function toggleAdvancedConfig() {
             const container = document.getElementById('advancedConfig');
             const button = document.getElementById('toggleAdvanced');
-            
+
             if (container.style.display === 'none') {
                 container.style.display = 'block';
                 button.textContent = '隐藏高级配置 ▲';
@@ -1099,7 +1119,7 @@
         function refreshResults() {
             const sort = document.getElementById('resultSort').value;
             const order = document.getElementById('resultOrder').value;
-            
+
             if (showQualifiedOnly) {
                 loadQualifiedResults();
             } else {
@@ -1110,7 +1130,7 @@
         function toggleQualifiedOnly() {
             showQualifiedOnly = !showQualifiedOnly;
             const button = document.getElementById('qualifiedToggle');
-            
+
             if (showQualifiedOnly) {
                 button.textContent = '显示全部';
                 button.style.background = '#667eea';
@@ -1153,7 +1173,7 @@
         // Metrics and monitoring
         function startMetricsPolling() {
             if (metricsInterval) return;
-            
+
             metricsInterval = setInterval(async () => {
                 await updateMetrics();
                 await updatePerformanceStats();
@@ -1166,26 +1186,26 @@
                 if (!response.ok) return;
 
                 const data = await response.json();
-                
+
                 // Update smoothed speed
                 const smoothedResponse = await fetch('/api/metrics/speed/smoothed');
                 if (smoothedResponse.ok) {
                     const smoothedData = await smoothedResponse.json();
                     document.getElementById('smoothedSpeed').textContent = smoothedData.smoothed_speed.toFixed(2) + ' Mbps';
-                    
+
                     // Add to speed chart
                     if (speedChart && smoothedData.smoothed_speed > 0) {
                         speedChart.addPoint(smoothedData.smoothed_speed, new Date());
                     }
                 }
-                
+
                 // Update sample count
                 const samplesResponse = await fetch('/api/metrics/speed/samples?count=10');
                 if (samplesResponse.ok) {
                     const samplesData = await samplesResponse.json();
                     document.getElementById('sampleCount').textContent = samplesData.count;
                 }
-                
+
             } catch (error) {
                 console.error('Error updating metrics:', error);
             }
@@ -1197,11 +1217,11 @@
                 const statsResponse = await fetch('/api/stats');
                 if (!statsResponse.ok) return;
                 const stats = await statsResponse.json();
-                
+
                 // Extract qualified count from progress display (format: "X/Y")
                 const progressText = document.getElementById('progress').textContent;
                 const qualifiedCount = parseInt(progressText.split('/')[0]) || 0;
-                
+
                 // Get error stats for failures (network + timeout errors)
                 const errorResponse = await fetch('/api/errors/stats');
                 let totalErrors = 0;
@@ -1212,7 +1232,7 @@
                     const timeoutErrors = errorStats.timeout?.total_count || 0;
                     totalErrors = networkErrors + timeoutErrors;
                 }
-                
+
                 // Update test statistics
                 // 成功 = 从测试进度中提取的有效服务器数
                 // 总计 = Total (已读取的IP总数)
@@ -1220,21 +1240,21 @@
                 document.getElementById('testsSuccessful').textContent = qualifiedCount;
                 document.getElementById('testsFailed').textContent = totalErrors;
                 document.getElementById('testsTotal').textContent = stats.Total || 0;
-                
+
                 // Get performance metrics for other stats
                 const metricsResponse = await fetch('/api/metrics/performance');
                 if (!metricsResponse.ok) return;
                 const metrics = await metricsResponse.json();
-                
+
                 document.getElementById('avgLatency').textContent = metrics.average_latency ? metrics.average_latency.toFixed(2) + ' ms' : '- ms';
                 document.getElementById('minLatency').textContent = metrics.min_latency && metrics.min_latency < 999999 ? metrics.min_latency.toFixed(2) + ' ms' : '- ms';
                 document.getElementById('maxLatency').textContent = metrics.max_latency ? metrics.max_latency.toFixed(2) + ' ms' : '- ms';
-                
+
                 document.getElementById('peakSpeed').textContent = metrics.peak_speed ? metrics.peak_speed.toFixed(2) + ' Mbps' : '- Mbps';
-                
+
                 const dataTransferMB = metrics.total_data_transfer ? (metrics.total_data_transfer / 1024 / 1024).toFixed(2) : '0';
                 document.getElementById('dataTransfer').textContent = dataTransferMB + ' MB';
-                
+
             } catch (error) {
                 console.error('Error updating performance stats:', error);
             }
@@ -1263,7 +1283,7 @@
 
         function renderFileStatus(status) {
             const container = document.getElementById('filesStatusContainer');
-            
+
             if (!status.missing_files || status.missing_files.length === 0) {
                 container.innerHTML = '<div style="color: #22543d; background: #c6f6d5; padding: 10px; border-radius: 4px;">✓ 所有数据文件已就绪</div>';
                 return;
@@ -1273,7 +1293,7 @@
             html += '⚠ 缺少以下数据文件: ' + status.missing_files.join(', ');
             html += '<br><small>点击"更新数据"按钮下载缺失的文件</small>';
             html += '</div>';
-            
+
             container.innerHTML = html;
         }
 
@@ -1284,7 +1304,7 @@
 
                 currentConfig = await response.json();
                 console.log('Loaded config:', currentConfig);
-                
+
                 // Load test config
                 document.getElementById('expectedServers').value = currentConfig.test?.expected_servers || 3;
                 document.getElementById('useTLS').checked = currentConfig.test?.use_tls || false;
@@ -1292,22 +1312,22 @@
                 document.getElementById('bandwidth').value = currentConfig.test?.bandwidth || 100;
                 document.getElementById('timeout').value = currentConfig.test?.timeout || 5;
                 document.getElementById('downloadTime').value = currentConfig.test?.download_time || 10;
-                
+
                 // Load advanced config - use retry_attempts instead of max_retries
                 document.getElementById('concurrentWorkers').value = currentConfig.advanced?.concurrent_workers || 10;
                 document.getElementById('maxRetries').value = currentConfig.advanced?.retry_attempts !== undefined ? currentConfig.advanced.retry_attempts : -1;
                 // Note: retry_delay is not in the backend config structure, so we'll use a default
                 document.getElementById('retryDelay').value = 2; // Default value
-                
+
                 // Load UI config - use correct field names
                 document.getElementById('enableMetrics').checked = currentConfig.advanced?.enable_metrics || false;
                 // Note: enable_error_handling is not in the backend config, so we'll use a default
                 document.getElementById('enableErrorHandling').checked = false; // Default value
                 document.getElementById('datacenterMode').value = currentConfig.ui?.datacenter_filter || 'all';
-                
+
                 // Load download URLs
                 renderURLs(currentConfig.download?.urls || {});
-                
+
                 // Load datacenters - wait for it to complete
                 await loadDatacenters();
             } catch (error) {
@@ -1330,14 +1350,14 @@
 
         function renderURLs(urls) {
             const container = document.getElementById('urlsContainer');
-            
+
             if (!urls || Object.keys(urls).length === 0) {
                 container.innerHTML = '<div class="empty-state">暂无下载地址配置</div>';
                 return;
             }
 
             let html = '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px;">';
-            
+
             for (const [key, value] of Object.entries(urls)) {
                 html += `
                     <div class="config-item">
@@ -1346,7 +1366,7 @@
                     </div>
                 `;
             }
-            
+
             html += '</div>';
             container.innerHTML = html;
         }
@@ -1400,12 +1420,12 @@
                 if (!response.ok) throw new Error('Failed to fetch stats');
 
                 const stats = await response.json();
-                
+
                 // Update progress - show qualified servers / expected servers
                 const expectedServers = currentConfig.test?.expected_servers || 3;
                 if (stats.Total > 0) {
                     document.getElementById('progress').textContent = `${stats.Qualified}/${expectedServers}`;
-                    
+
                     // Check for progress stall (no progress for 5 minutes)
                     if (stats.Qualified > 0) {
                         lastProgressUpdate = Date.now();
@@ -1493,6 +1513,8 @@
                     return 'status-testing';
                 case '待测试':
                     return 'status-pending';
+                case '低速':
+                    return 'status-low-speed';
                 default:
                     return 'status-error';
             }
@@ -1528,4 +1550,5 @@
         });
     </script>
 </body>
+
 </html>
