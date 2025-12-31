@@ -20,8 +20,8 @@ set CGO_ENABLED=0
 REM 创建bin目录
 if not exist "bin" mkdir bin
 
-REM 编译
-go build -ldflags="-s -w" -o bin\cloudflare-speedtest.exe .
+REM 编译（带优化）
+go build -trimpath -ldflags="-s -w -X main.Version=1.0" -o bin\cloudflare-speedtest.exe .
 
 if errorlevel 1 (
     echo Build failed!
