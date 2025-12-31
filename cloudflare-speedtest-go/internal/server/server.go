@@ -577,92 +577,107 @@ func (s *Server) runTest() {
 
 	fmt.Printf("Domain: %s, FilePath: %s\n", domain, filePath)
 
-	// Read IPs based on IP type
-	fmt.Printf("Reading IPs from %s...\n", s.config.Test.IPType)
-	ips, err := s.ipReader.ReadIPs(s.config.Test.IPType, 100) // Read more IPs for two-phase testing
-	if err != nil {
-		fmt.Printf("Failed to read IPs: %v\n", err)
-		return
-	}
-
-	if len(ips) == 0 {
-		fmt.Println("No IPs available for testing")
-		return
-	}
-
-	fmt.Printf("Starting two-phase speed test with %d IPs\n", len(ips))
-	fmt.Printf("Phase 1: Concurrent datacenter detection using %d workers\n", s.config.Advanced.ConcurrentWorkers)
-	fmt.Printf("Phase 2: Serial speed testing (to avoid bandwidth interference)\n")
 	fmt.Printf("Data center filter mode: %s\n", s.coloManager.GetFilterMode())
 	if s.coloManager.GetFilterMode() == "selected" {
 		fmt.Printf("Selected data centers: %v\n", s.coloManager.GetSelectedDataCenters())
 	}
 
-	// Initialize stats
-	s.resultManager.SetTotal(len(ips))
+	expectedServers := s.config.Test.ExpectedServers
+	expectedBandwidth := s.config.Test.Bandwidth
+	fmt.Printf("Target: %d servers with speed >= %.2f Mbps\n", expectedServers, expectedBandwidth)
 
-	// PHASE 1: Concurrent datacenter detection
-	fmt.Println("\n=== PHASE 1: Concurrent Datacenter Detection ===")
-	validIPs := s.runDataCenterPhase(ips, domain, filePath)
+	// Determine max attempts: -1 means unlimited, otherwise use configured value
+	maxAttempts := s.config.Advanced.RetryAttempts
+	if maxAttempts < 0 {
+		maxAttempts = 1000 // Use a large number to represent "unlimited"
+	}
 
-	// If no valid IPs found, try to read more IPs and retry
-	if len(validIPs) == 0 {
-		fmt.Println("No valid IPs found in first batch, attempting to read more IPs...")
+	totalIPsTested := 0
+	batchNumber := 0
 
-		// Determine max attempts: -1 means unlimited, otherwise use configured value
-		maxAttempts := s.config.Advanced.RetryAttempts
-		if maxAttempts < 0 {
-			maxAttempts = 1000 // Use a large number to represent "unlimited"
-		}
-
-		// Try to read more IPs
-		for attempt := 1; attempt <= maxAttempts && len(validIPs) == 0; attempt++ {
-			// Check if testing should stop
-			s.testMu.RLock()
-			if !s.testing {
-				s.testMu.RUnlock()
-				fmt.Println("Testing stopped by user")
-				return
-			}
+	// Main loop: keep reading and testing IPs until we have enough qualified servers
+	for {
+		// Check if testing should stop
+		s.testMu.RLock()
+		if !s.testing {
 			s.testMu.RUnlock()
-
-			// Show warning message after 3 attempts
-			if attempt >= 3 {
-				fmt.Printf("Retry attempt %d: 该数据中心IP较少，需要较长时间，请耐心等待...\n", attempt)
-			} else {
-				fmt.Printf("Retry attempt %d: Reading more IPs...\n", attempt)
-			}
-
-			moreIPs, err := s.ipReader.ReadIPs(s.config.Test.IPType, 100)
-			if err != nil {
-				fmt.Printf("Failed to read more IPs: %v\n", err)
-				break
-			}
-
-			if len(moreIPs) == 0 {
-				fmt.Println("No more IPs available")
-				break
-			}
-
-			fmt.Printf("Testing %d more IPs\n", len(moreIPs))
-			validIPs = s.runDataCenterPhase(moreIPs, domain, filePath)
+			fmt.Println("Testing stopped by user")
+			return
 		}
+		s.testMu.RUnlock()
+
+		batchNumber++
+		fmt.Printf("\n=== Batch %d: Reading IPs ===\n", batchNumber)
+
+		// Read IPs based on IP type
+		fmt.Printf("Reading IPs from %s...\n", s.config.Test.IPType)
+		ips, err := s.ipReader.ReadIPs(s.config.Test.IPType, 100)
+		if err != nil {
+			fmt.Printf("Failed to read IPs: %v\n", err)
+			break
+		}
+
+		if len(ips) == 0 {
+			fmt.Println("No more IPs available for testing")
+			break
+		}
+
+		totalIPsTested += len(ips)
+		fmt.Printf("Batch %d: Read %d IPs (total tested so far: %d)\n", batchNumber, len(ips), totalIPsTested)
+
+		// Update total IPs for progress tracking
+		s.resultManager.SetTotal(totalIPsTested)
+
+		// PHASE 1: Concurrent datacenter detection
+		fmt.Printf("\n=== Batch %d - Phase 1: Concurrent Datacenter Detection ===\n", batchNumber)
+		validIPs := s.runDataCenterPhase(ips, domain, filePath)
+
+		if len(validIPs) == 0 {
+			fmt.Printf("Batch %d: No valid IPs found after datacenter filtering\n", batchNumber)
+			continue
+		}
+
+		fmt.Printf("Batch %d - Phase 1 completed: %d valid IPs found\n", batchNumber, len(validIPs))
+
+		// PHASE 2: Serial speed testing
+		fmt.Printf("\n=== Batch %d - Phase 2: Serial Speed Testing ===\n", batchNumber)
+		s.runSpeedTestPhase(validIPs, domain, filePath)
+
+		// Check if we have enough qualified servers
+		qualifiedResults := s.resultManager.GetQualifiedResults()
+		qualifiedCount := 0
+
+		for _, r := range qualifiedResults {
+			speedVal, err := strconv.ParseFloat(r.Speed, 64)
+			if err == nil && speedVal >= expectedBandwidth {
+				qualifiedCount++
+			}
+		}
+
+		fmt.Printf("\nCurrent progress: %d servers with speed >= %.2f Mbps (need %d)\n",
+			qualifiedCount, expectedBandwidth, expectedServers)
+
+		if qualifiedCount >= expectedServers {
+			fmt.Printf("\n✓ Found %d qualified servers (speed >= %.2f Mbps). Expected: %d. Test completed.\n",
+				qualifiedCount, expectedBandwidth, expectedServers)
+
+			// Update total to match completed so frontend knows we are done
+			stats := s.resultManager.GetStats()
+			s.resultManager.SetTotal(stats.Completed)
+
+			break
+		}
+
+		// Check if we've exceeded max attempts
+		if batchNumber >= maxAttempts {
+			fmt.Printf("\nReached maximum attempts (%d). Stopping test.\n", maxAttempts)
+			fmt.Printf("Final result: %d servers with speed >= %.2f Mbps (target was %d)\n",
+				qualifiedCount, expectedBandwidth, expectedServers)
+			break
+		}
+
+		fmt.Printf("Batch %d completed. Need more qualified servers, reading next batch...\n", batchNumber)
 	}
-
-	if len(validIPs) == 0 {
-		fmt.Println("No valid IPs found after all attempts")
-		fmt.Println("This might be due to:")
-		fmt.Println("1. Network connectivity issues")
-		fmt.Println("2. Strict datacenter filtering")
-		fmt.Println("3. All IPs failed datacenter detection")
-		return
-	}
-
-	fmt.Printf("Phase 1 completed: %d valid IPs found\n", len(validIPs))
-
-	// PHASE 2: Serial speed testing
-	fmt.Println("\n=== PHASE 2: Serial Speed Testing ===")
-	s.runSpeedTestPhase(validIPs, domain, filePath)
 
 	fmt.Println("Two-phase speed test completed")
 }
@@ -770,6 +785,8 @@ func (s *Server) runSpeedTestPhase(validIPs []string, domain, filePath string) {
 	enhancedTester := tester.NewEnhanced(s.config.Test.Timeout)
 	enhancedTester.SetConfig(domain, filePath, float64(s.config.Test.DownloadTime))
 
+	expectedBandwidth := s.config.Test.Bandwidth
+
 	// Test each IP serially to avoid bandwidth interference
 	for i, ip := range validIPs {
 		// Check if testing should stop
@@ -813,7 +830,6 @@ func (s *Server) runSpeedTestPhase(validIPs []string, domain, filePath string) {
 		}
 
 		// Check bandwidth requirement to set status
-		expectedBandwidth := s.config.Test.Bandwidth
 		speedVal, _ := strconv.ParseFloat(speedResult.Speed, 64)
 		if expectedBandwidth > 0 && speedVal < expectedBandwidth {
 			speedResult.Status = "低速"
@@ -839,32 +855,6 @@ func (s *Server) runSpeedTestPhase(validIPs []string, domain, filePath string) {
 
 		// Small delay between tests to avoid overwhelming the server
 		time.Sleep(100 * time.Millisecond)
-
-		// Check if we found enough qualified servers (with bandwidth requirement)
-		qualifiedResults := s.resultManager.GetQualifiedResults()
-		qualifiedCount := 0
-
-		for _, r := range qualifiedResults {
-			// Speed is string like "123.45", ignore errors as they should be valid floats
-			speedVal, err := strconv.ParseFloat(r.Speed, 64)
-			if err == nil && speedVal >= expectedBandwidth {
-				qualifiedCount++
-			}
-		}
-
-		fmt.Printf("Current progress: %d servers with speed >= %.2f Mbps (need %d)\n",
-			qualifiedCount, expectedBandwidth, s.config.Test.ExpectedServers)
-
-		if qualifiedCount >= s.config.Test.ExpectedServers {
-			fmt.Printf("\nFound %d qualified servers (speed >= %.2f Mbps). Expected: %d. Stopping test.\n",
-				qualifiedCount, expectedBandwidth, s.config.Test.ExpectedServers)
-
-			// Update total to match completed so frontend knows we are done
-			stats := s.resultManager.GetStats()
-			s.resultManager.SetTotal(stats.Completed)
-
-			break
-		}
 	}
 
 	// Clear current IP status
