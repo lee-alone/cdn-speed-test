@@ -51,9 +51,21 @@ func (s *Server) getStatus(w http.ResponseWriter, r *http.Request) {
 	testing := s.testing
 	s.testMu.RUnlock()
 
+	// Check for missing data files
+	files := downloader.GetFilesFromConfig(s.config.GetAllDownloadURLs())
+	var missingFiles []string
+
+	for _, file := range files {
+		filePath := filepath.Join(s.dataDir, file.Name)
+		if !downloader.FileExists(filePath) {
+			missingFiles = append(missingFiles, file.Name)
+		}
+	}
+
 	s.writeJSON(w, http.StatusOK, map[string]any{
-		"testing":   testing,
-		"timestamp": time.Now(),
+		"testing":       testing,
+		"timestamp":     time.Now(),
+		"missing_files": missingFiles,
 	})
 }
 
@@ -115,4 +127,3 @@ func (s *Server) updateData(w http.ResponseWriter, r *http.Request) {
 		"files":   len(toDownload),
 	})
 }
-
