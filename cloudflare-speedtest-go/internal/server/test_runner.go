@@ -74,11 +74,6 @@ func (s *Server) runTest() {
 	expectedBandwidth := s.config.Test.Bandwidth
 	fmt.Printf("Target: %d servers with speed >= %.2f Mbps\n", expectedServers, expectedBandwidth)
 
-	maxAttempts := s.config.Advanced.RetryAttempts
-	if maxAttempts < 0 {
-		maxAttempts = 1000
-	}
-
 	totalIPsTested := 0
 	batchNumber := 0
 
@@ -144,13 +139,6 @@ func (s *Server) runTest() {
 			stats := s.resultManager.GetStats()
 			s.resultManager.SetTotal(stats.Completed)
 
-			break
-		}
-
-		if batchNumber >= maxAttempts {
-			fmt.Printf("\nReached maximum attempts (%d). Stopping test.\n", maxAttempts)
-			fmt.Printf("Final result: %d servers with speed >= %.2f Mbps (target was %d)\n",
-				qualifiedCount, expectedBandwidth, expectedServers)
 			break
 		}
 

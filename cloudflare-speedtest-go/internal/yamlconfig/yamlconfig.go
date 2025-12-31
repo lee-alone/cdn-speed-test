@@ -50,7 +50,6 @@ type UIConfig struct {
 // AdvancedConfig represents advanced system settings
 type AdvancedConfig struct {
 	ConcurrentWorkers int    `yaml:"concurrent_workers" json:"concurrent_workers"`
-	RetryAttempts     int    `yaml:"retry_attempts" json:"retry_attempts"`
 	LogLevel          string `yaml:"log_level" json:"log_level"`
 	EnableMetrics     bool   `yaml:"enable_metrics" json:"enable_metrics"`
 }
@@ -86,7 +85,6 @@ func DefaultConfig() *Config {
 		},
 		Advanced: AdvancedConfig{
 			ConcurrentWorkers: 10,
-			RetryAttempts:     -1, // -1 means unlimited retries
 			LogLevel:          "info",
 			EnableMetrics:     true,
 		},
@@ -188,9 +186,6 @@ func mergeWithDefaults(cfg *Config) {
 	// Merge advanced config
 	if cfg.Advanced.ConcurrentWorkers == 0 {
 		cfg.Advanced.ConcurrentWorkers = defaults.Advanced.ConcurrentWorkers
-	}
-	if cfg.Advanced.RetryAttempts == 0 {
-		cfg.Advanced.RetryAttempts = defaults.Advanced.RetryAttempts
 	}
 	if cfg.Advanced.LogLevel == "" {
 		cfg.Advanced.LogLevel = defaults.Advanced.LogLevel
@@ -360,14 +355,6 @@ func (cfg *Config) Validate() error {
 			Field:   "advanced.concurrent_workers",
 			Value:   cfg.Advanced.ConcurrentWorkers,
 			Message: "must be between 1 and 100",
-		})
-	}
-
-	if cfg.Advanced.RetryAttempts < -1 || cfg.Advanced.RetryAttempts > 10 {
-		errors = append(errors, ValidationError{
-			Field:   "advanced.retry_attempts",
-			Value:   cfg.Advanced.RetryAttempts,
-			Message: "must be -1 (unlimited) or between 0 and 10",
 		})
 	}
 

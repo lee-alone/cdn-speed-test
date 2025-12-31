@@ -66,7 +66,6 @@ window.startTestWithAutoSave = async function () {
             },
             advanced: {
                 concurrent_workers: parseInt(document.getElementById('concurrentWorkers').value) || 10,
-                retry_attempts: parseInt(document.getElementById('maxRetries').value) || 3,
                 log_level: 'info',
                 enable_metrics: document.getElementById('enableMetrics').checked
             }
@@ -392,7 +391,6 @@ window.addEventListener('load', async () => {
         document.getElementById('timeout').value = currentConfig.test?.timeout || 5;
         document.getElementById('downloadTime').value = currentConfig.test?.download_time || 10;
         document.getElementById('concurrentWorkers').value = currentConfig.advanced?.concurrent_workers || 10;
-        document.getElementById('maxRetries').value = currentConfig.advanced?.retry_attempts ?? -1;
         document.getElementById('enableMetrics').checked = currentConfig.advanced?.enable_metrics || false;
         document.getElementById('datacenterMode').value = currentConfig.ui?.datacenter_filter || 'all';
 
