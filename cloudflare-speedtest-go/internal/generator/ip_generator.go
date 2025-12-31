@@ -198,15 +198,25 @@ func (ig *IPGenerator) generateIPv6Enhanced(subnet string) *GenerationResult {
 			hostBytes++
 		}
 
-		// Generate random bytes for host portion
-		for i := 0; i < hostBytes && i < 8; i++ {
-			byteIndex := 16 - hostBytes + i
+		// Generate random bytes for the host portion
+		// We only randomize the last hostBytes of the IP address
+		for i := 0; i < hostBytes; i++ {
+			byteIndex := 15 - i
 			if byteIndex >= 0 && byteIndex < 16 {
+				// Ensure we don't modify network prefix bits if hostBits is not a multiple of 8
 				randomByte, err := ig.generateSecureRandomByte()
 				if err != nil {
 					continue
 				}
-				resultIP[byteIndex] = randomByte
+
+				if i == hostBytes-1 && hostBits%8 != 0 {
+					// Only randomize the remaining bits of this byte
+					mask := byte((1 << uint(hostBits%8)) - 1)
+					resultIP[byteIndex] = (resultIP[byteIndex] & ^mask) | (randomByte & mask)
+				} else if byteIndex >= ones/8 {
+					// Fully randomize this byte if it's within the host portion
+					resultIP[byteIndex] = randomByte
+				}
 			}
 		}
 
