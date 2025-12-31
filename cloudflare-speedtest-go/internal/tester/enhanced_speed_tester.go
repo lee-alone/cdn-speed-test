@@ -158,14 +158,16 @@ func (est *EnhancedSpeedTester) TestSpeedOnly(ip string, useTLS bool, timeout in
 
 // performSpeedTest performs the actual speed test with sliding window algorithm
 func (est *EnhancedSpeedTester) performSpeedTest(reader io.Reader, downloadTime float64) (*models.SpeedTestResult, error) {
-	startTime := time.Now()
-	endTime := startTime.Add(time.Duration(downloadTime) * time.Second)
+	initialStartTime := time.Now()
+	endTime := initialStartTime.Add(time.Duration(downloadTime) * time.Second)
 
 	totalBytes := int64(0)
 	samples := make([]SpeedSample, 0)
 	peakSpeed := 0.0
 	chunkSize := 65536 // 64KB chunks
-	lastSampleTime := startTime
+	lastSampleTime := initialStartTime
+	var startTime time.Time // Will be set after first data chunk
+	firstChunkReceived := false
 
 	for {
 		currentTime := time.Now()
@@ -182,6 +184,13 @@ func (est *EnhancedSpeedTester) performSpeedTest(reader io.Reader, downloadTime 
 
 		if n > 0 {
 			totalBytes += int64(n)
+
+			// Reset startTime after receiving first data chunk (exclude TTFB)
+			if !firstChunkReceived {
+				startTime = time.Now()
+				lastSampleTime = startTime
+				firstChunkReceived = true
+			}
 		}
 
 		if err == io.EOF {
@@ -189,7 +198,7 @@ func (est *EnhancedSpeedTester) performSpeedTest(reader io.Reader, downloadTime 
 		}
 
 		// Take sample if enough time has passed
-		if currentTime.Sub(lastSampleTime) >= est.sampleRate {
+		if firstChunkReceived && currentTime.Sub(lastSampleTime) >= est.sampleRate {
 			elapsed := currentTime.Sub(startTime).Seconds()
 			if elapsed > 0 {
 				// Calculate current speed in Mbps
@@ -221,6 +230,10 @@ func (est *EnhancedSpeedTester) performSpeedTest(reader io.Reader, downloadTime 
 	}
 
 	// Calculate final statistics
+	if !firstChunkReceived {
+		return nil, fmt.Errorf("no data received")
+	}
+
 	totalDuration := time.Since(startTime).Seconds()
 	finalSpeed := 0.0
 	if totalDuration > 0 && totalBytes > 0 {
@@ -339,15 +352,17 @@ func (est *EnhancedSpeedTester) TestSpeedWithSamples(ip string, useTLS bool, tim
 
 // performSpeedTestWithSamples performs speed test and returns all samples
 func (est *EnhancedSpeedTester) performSpeedTestWithSamples(reader io.Reader, downloadTime float64) (*models.SpeedTestResult, []SpeedSample, error) {
-	startTime := time.Now()
-	endTime := startTime.Add(time.Duration(downloadTime) * time.Second)
+	initialStartTime := time.Now()
+	endTime := initialStartTime.Add(time.Duration(downloadTime) * time.Second)
 
 	totalBytes := int64(0)
 	allSamples := make([]SpeedSample, 0)
 	windowSamples := make([]SpeedSample, 0)
 	peakSpeed := 0.0
 	chunkSize := 65536
-	lastSampleTime := startTime
+	lastSampleTime := initialStartTime
+	var startTime time.Time // Will be set after first data chunk
+	firstChunkReceived := false
 
 	for {
 		currentTime := time.Now()
@@ -363,13 +378,20 @@ func (est *EnhancedSpeedTester) performSpeedTestWithSamples(reader io.Reader, do
 
 		if n > 0 {
 			totalBytes += int64(n)
+
+			// Reset startTime after receiving first data chunk (exclude TTFB)
+			if !firstChunkReceived {
+				startTime = time.Now()
+				lastSampleTime = startTime
+				firstChunkReceived = true
+			}
 		}
 
 		if err == io.EOF {
 			break
 		}
 
-		if currentTime.Sub(lastSampleTime) >= est.sampleRate {
+		if firstChunkReceived && currentTime.Sub(lastSampleTime) >= est.sampleRate {
 			elapsed := currentTime.Sub(startTime).Seconds()
 			if elapsed > 0 {
 				currentSpeed := (float64(totalBytes) * 8) / (elapsed * 1000000)
@@ -396,6 +418,10 @@ func (est *EnhancedSpeedTester) performSpeedTestWithSamples(reader io.Reader, do
 				lastSampleTime = currentTime
 			}
 		}
+	}
+
+	if !firstChunkReceived {
+		return nil, nil, fmt.Errorf("no data received")
 	}
 
 	totalDuration := time.Since(startTime).Seconds()
