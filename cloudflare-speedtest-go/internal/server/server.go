@@ -8,7 +8,6 @@ import (
 	"cloudflare-speedtest/internal/resultmanager"
 	"cloudflare-speedtest/internal/tester"
 	"cloudflare-speedtest/internal/urlmanager"
-	"cloudflare-speedtest/internal/workerpool"
 	"cloudflare-speedtest/internal/yamlconfig"
 	"embed"
 	"fmt"
@@ -32,9 +31,7 @@ type Server struct {
 	downloader    *downloader.Downloader
 	urlManager    *urlmanager.URLManager
 	coloManager   *colomanager.ColoManager
-	speedTester   *tester.SpeedTester
 	ipReader      *tester.IPReader
-	workerPool    *workerpool.WorkerPool
 	dataDir       string
 	configPath    string
 	staticFS      embed.FS
@@ -68,9 +65,7 @@ func New(cfg *yamlconfig.Config, dataDir string, configPath string, staticFS emb
 		downloader:    downloader,
 		urlManager:    urlmanager.New(dataDir),
 		coloManager:   coloManager,
-		speedTester:   tester.New(10),
 		ipReader:      tester.NewIPReader(dataDir),
-		workerPool:    workerpool.New(cfg.Advanced.ConcurrentWorkers, coloManager),
 		dataDir:       dataDir,
 		configPath:    configPath,
 		staticFS:      staticFS,

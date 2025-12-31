@@ -20,10 +20,6 @@ func (s *Server) runTest() {
 		s.testing = false
 		s.testMu.Unlock()
 
-		if s.workerPool.IsRunning() {
-			s.workerPool.Stop()
-		}
-
 		fmt.Println("Test execution completed, testing flag set to false")
 	}()
 

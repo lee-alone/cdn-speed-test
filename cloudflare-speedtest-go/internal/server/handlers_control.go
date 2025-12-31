@@ -36,12 +36,6 @@ func (s *Server) stopTest(w http.ResponseWriter, r *http.Request) {
 	s.testing = false
 	s.testMu.Unlock()
 
-	if s.workerPool.IsRunning() {
-		if err := s.workerPool.Stop(); err != nil {
-			fmt.Printf("Error stopping worker pool: %v\n", err)
-		}
-	}
-
 	s.writeJSON(w, http.StatusOK, map[string]string{"message": "test stopped"})
 }
 
